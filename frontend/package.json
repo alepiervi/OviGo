@@ -1,0 +1,13 @@
+{
+  "name": "ovigo-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OVIGO - sito e aree riservate (pagina unica, parla con il server su /api)",
+  "scripts": {
+    "start": "serve public -l tcp://0.0.0.0:${PORT:-3000}",
+    "build": "node -e \"const f=require('fs');f.rmSync('build',{recursive:true,force:true});f.cpSync('public','build',{recursive:true})\""
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}
