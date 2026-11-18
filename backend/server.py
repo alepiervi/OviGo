@@ -16,6 +16,8 @@ import secrets
 import logging
 import asyncio
 import base64
+import hashlib
+from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -56,11 +58,17 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
+
+# Cloudinary: CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME  oppure le tre variabili separate
+_cu = urlparse(os.environ.get("CLOUDINARY_URL", "")) if os.environ.get("CLOUDINARY_URL") else None
+CLD_CLOUD = os.environ.get("CLOUDINARY_CLOUD_NAME") or (_cu.hostname if _cu else "") or ""
+CLD_KEY = os.environ.get("CLOUDINARY_API_KEY") or (_cu.username if _cu else "") or ""
+CLD_SECRET = os.environ.get("CLOUDINARY_API_SECRET") or (_cu.password if _cu else "") or ""
 TOKEN_DAYS = 30
 
 COLLS = ["tours", "bookings", "users", "orgs", "notifications", "reviews", "settings", "proposte",
          "messaggi", "foto", "eventi", "codici", "cassa", "appelli", "pool", "avvisi", "bozze", "dm",
-         "media", "fornitori", "collab", "programmati"]
+         "media", "fornitori", "collab", "programmati", "catalogo"]
 
 app = FastAPI(title="OVIGO")
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
@@ -614,6 +622,8 @@ def visible(ctx: Ctx, c: str, d: dict) -> Optional[dict]:
         return None
     if c == "fornitori":
         return d if a or (ctx.org and d.get("orgId") == ctx.org) else None
+    if c == "catalogo":
+        return d if a or (ctx.org and d.get("orgId") in (ctx.org, None)) else None
     if c in ("collab", "pool"):
         return d if a or (ctx.org and ctx.org in (d.get("fromOrgId"), d.get("toOrgId"))) else None
     if c == "bozze":
@@ -878,7 +888,7 @@ async def check_write(ctx: Ctx, c: str, old: Optional[dict], new: dict) -> dict:
             return m
         deny()
 
-    if c == "fornitori":
+    if c in ("fornitori", "catalogo"):
         if org and new.get("orgId") == org and (not old or old.get("orgId") == org):
             return new
         deny()
@@ -911,6 +921,8 @@ def can_delete(ctx: Ctx, c: str, d: dict) -> bool:
         return d.get("userId") == uid or org_of_tour(ctx, d.get("tourId"))
     if c in ("bozze",):
         return d.get("userId") == uid
+    if c == "catalogo":
+        return bool(org and d.get("orgId") == org)
     if c in ("tours", "fornitori", "codici", "programmati", "media", "eventi", "cassa", "appelli"):
         return bool(org and (d.get("orgId") == org or org_of_tour(ctx, d.get("tourId"))))
     if c == "users":
@@ -952,6 +964,11 @@ async def remove_doc(c: str, id_: str, request: Request):
     ctx = await make_ctx(u)
     if not can_delete(ctx, c, d):
         deny()
+    if c == "catalogo":
+        if await db.media.count_documents({"catalogoId": id_}) > 0:
+            raise HTTPException(400, "Foto usata in uno o più viaggi: toglila prima dai viaggi")
+        if d.get("publicId"):
+            fire(cloudinary_destroy(d["publicId"]))
     await delete_doc(c, id_)
     if c == "bookings":
         await tour_triggers(d.get("tourId"))
@@ -1364,6 +1381,38 @@ async def get_file(fid: str, request: Request):
         deny()
     nome = re.sub(r'[^\w.\- ]', '_', f.get("nome", "documento"))
     return Response(content=base64.b64decode(f["data"]), media_type=f["mime"], headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, no-store"})
+
+
+# ------------------------------------------------------------------ foto su Cloudinary
+def cld_sign(params: dict) -> str:
+    """Firma Cloudinary: parametri in ordine alfabetico, uniti con &, più il segreto, SHA-1."""
+    base = "&".join(f"{k}={v}" for k, v in sorted(params.items()) if v not in (None, ""))
+    return hashlib.sha1((base + CLD_SECRET).encode()).hexdigest()
+
+
+@app.post("/api/cloudinary/firma")
+async def cloudinary_sign(request: Request):
+    u = await need_user(request)
+    if u.get("ruolo") not in ("organizzatore", "admin"):
+        deny()
+    if not (CLD_CLOUD and CLD_KEY and CLD_SECRET):
+        raise HTTPException(503, "Cloudinary non configurato")
+    folder = "ovigo/" + (u.get("orgId") if u.get("ruolo") == "organizzatore" and u.get("orgId") else "catalogo-ovigo")
+    ts = int(time.time())
+    params = {"folder": folder, "timestamp": ts}
+    return {"cloudName": CLD_CLOUD, "apiKey": CLD_KEY, "timestamp": ts, "folder": folder, "signature": cld_sign(params)}
+
+
+async def cloudinary_destroy(public_id: str):
+    if not (CLD_CLOUD and CLD_KEY and CLD_SECRET):
+        return
+    ts = int(time.time())
+    try:
+        async with httpx.AsyncClient(timeout=20) as cl:
+            await cl.post(f"https://api.cloudinary.com/v1_1/{CLD_CLOUD}/image/destroy",
+                          data={"public_id": public_id, "timestamp": ts, "api_key": CLD_KEY, "signature": cld_sign({"public_id": public_id, "timestamp": ts})})
+    except Exception as e:
+        log.warning("Cloudinary destroy: %s", e)
 
 
 # ------------------------------------------------------------------ avvio

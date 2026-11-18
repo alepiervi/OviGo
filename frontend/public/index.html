@@ -599,7 +599,7 @@ function tourCard(t){
   const u = me(), wished = u && Object.values(S.bookings).some(b=>b.userId===u.id && b.tourId===t.id && b.tipo==='desiderio');
   const r = orgRating(t.orgId);
   return `<div class="card tcard" onclick="go('tour','${t.id}')">
-    <div class="img">${art(t.tema, seedOf(t.id))}
+    <div class="img">${coverHtml(t)}
       <div class="tags">${t.privato?'<span class="badge red">🔒 Privato</span>':''}${t.festivita?`<span class="badge coral">${FEST[t.festivita]}</span>`:''}<span class="badge">${t.area==='estero'?'Estero':'Italia'}</span>${t.inEvidenza?'<span class="badge amber">In evidenza</span>':''}</div>
       <button class="heart" title="Lista dei desideri" onclick="event.stopPropagation();openWish('${t.id}')">${wished?'♥':'♡'}</button>
     </div>
@@ -1276,6 +1276,7 @@ function viewCrm(){
   else if(sub==='pool') main = crmPool(o);
   else if(sub==='accompagnatori') main = crmAccompagnatori(o);
   else if(sub==='pratiche') main = crmPratiche(o);
+  else if(sub==='catalogo') main = crmCatalogo(o);
   else if(sub==='bonifici') main = crmBonifici(o);
   else main = crmDashboard(o);
   return `<div class="app"><aside class="sidebar">
@@ -1287,6 +1288,7 @@ function viewCrm(){
     ${sideLink('proposte','Preventivi e proposte', Object.values(S.proposte).filter(p=>p.stato==='aperta'&&!(p.offerte||[]).some(x=>x.orgId===o.id)).length)}
     ${sideLink('prenotazioni','Prenotazioni')}
     ${sideLink('bonifici','💶 Bonifici dei clienti', orgVersamenti(o).filter(r=>r.v.stato==='dichiarato'&&r.v.agenzia!=='ricevuto').length)}
+    ${sideLink('catalogo','📷 Catalogo foto')}
     ${sideLink('opzioni','Opzioni in scadenza')}
     ${sideLink('rooming','Rooming list')}
     ${sideLink('roomingEdit','Rooming per hotel')}
@@ -2572,12 +2574,12 @@ function mediaOf(tid, where){ return Object.values(S.media).filter(m=>m.tourId==
 function galleryHero(t){
   const ph = mediaOf(t.id, 'tour'); if(!ph.length) return `<div class="detailhero">${art(t.tema, seedOf(t.id))}</div>`;
   const i = Math.min(UI.gal||0, ph.length-1);
-  return `<div class="detailhero"><img src="${ph[i].img}" alt="Foto del tour" style="width:100%;height:100%;object-fit:cover"></div><div class="row" style="margin-top:8px;gap:6px">${ph.map((m,j)=>`<img src="${m.img}" onclick="UI.gal=${j};renderAll()" style="width:64px;height:48px;object-fit:cover;border-radius:8px;cursor:pointer;${j===i?'outline:2px solid var(--coral)':''}" alt="Miniatura ${j+1}">`).join('')}</div>`;
+  return `<div class="detailhero"><img src="${ph[i].img}" alt="Foto del tour" style="width:100%;height:100%;object-fit:cover"></div><div class="row" style="margin-top:8px;gap:6px">${ph.map((m,j)=>`<img src="${cImg(m.img,400)}" onclick="UI.gal=${j};renderAll()" style="width:64px;height:48px;object-fit:cover;border-radius:8px;cursor:pointer;${j===i?'outline:2px solid var(--coral)':''}" alt="Miniatura ${j+1}">`).join('')}</div>`;
 }
 function hotelExtra(t, idx){
   const h = (t.hotel||[])[idx]; if(!h) return '';
   const ph = mediaOf(t.id, 'h'+idx); const q = encodeURIComponent((h.nome||'')+' '+(h.zona||''));
-  return `${ph.length?`<div class="row" style="gap:6px;margin-top:6px">${ph.map(m=>`<img src="${m.img}" style="width:84px;height:60px;object-fit:cover;border-radius:8px" alt="Foto ${esc(h.nome)}">`).join('')}</div>`:''}<div class="small" style="margin-top:4px">📍 <a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Vedi sulla mappa</a></div>`;
+  return `${ph.length?`<div class="row" style="gap:6px;margin-top:6px">${ph.map(m=>`<img src="${cImg(m.img,400)}" style="width:84px;height:60px;object-fit:cover;border-radius:8px" alt="Foto ${esc(h.nome)}">`).join('')}</div>`:''}<div class="small" style="margin-top:4px">📍 <a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Vedi sulla mappa</a></div>`;
 }
 async function uploadMedia(tid, where, input){
   const files = [...(input.files||[])].slice(0,4); for(const f of files){
@@ -2589,7 +2591,7 @@ async function uploadMedia(tid, where, input){
   } toast('Foto caricate');
 }
 function mediaEditor(t){
-  const box = (where, label) => `<div class="room"><b>${label}</b><div class="row" style="gap:6px;margin:8px 0">${mediaOf(t.id, where).map(m=>`<span style="position:relative"><img src="${m.img}" style="width:90px;height:64px;object-fit:cover;border-radius:8px" alt=""><button class="btn sm" style="position:absolute;top:2px;right:2px;padding:0 6px" onclick="remove('media','${m.id}')">×</button></span>`).join('')||'<span class="small muted">Nessuna foto</span>'}</div><label class="btn sm">+ Carica foto<input type="file" accept="image/*" multiple style="display:none" onchange="uploadMedia('${t.id}','${where}',this)"></label></div>`;
+  const box = (where, label) => `<div class="room"><b>${label}</b><div class="row" style="gap:6px;margin:8px 0">${mediaOf(t.id, where).map(m=>`<span style="position:relative"><img src="${cImg(m.img,400)}" style="width:90px;height:64px;object-fit:cover;border-radius:8px" alt=""><button class="btn sm" style="position:absolute;top:2px;right:2px;padding:0 6px" onclick="remove('media','${m.id}')">×</button></span>`).join('')||'<span class="small muted">Nessuna foto</span>'}</div><label class="btn sm">+ Carica foto<input type="file" accept="image/*" multiple style="display:none" onchange="uploadMedia('${t.id}','${where}',this)"></label></div>`;
   if(!S.tours[t.id]) return '<p class="small muted">Salva la bozza per caricare le foto.</p>';
   return box('tour','Galleria del tour (la prima è la copertina)') + (t.hotel||[]).map((h,i)=>box('h'+i, 'Foto di '+(h.nome||'hotel '+(i+1)))).join('');
 }
@@ -4195,6 +4197,127 @@ async function adminDelAcc(id){
   await remove('users', id); toast('Accompagnatore rimosso');
 }
 ADMIN_SECTIONS.accompagnatori = ['Accompagnatori', adminAccompagnatori];
+
+/* =====================================================================
+   FOTO: caricate su Cloudinary + catalogo riutilizzabile
+   - il browser riduce la foto (max 2400 px, qualità alta) e la manda direttamente a Cloudinary
+   - le pagine chiedono a Cloudinary la misura giusta in formato moderno (f_auto, q_auto:good)
+   - ogni foto entra nel catalogo dell'agenzia: si riusa in altri viaggi senza ricaricarla
+   ===================================================================== */
+if(!COLL.includes('catalogo')){ COLL.push('catalogo'); S.catalogo = S.catalogo || {}; }
+function cImg(url, w){
+  if(!url || typeof url!=='string') return '';
+  if(url.includes('res.cloudinary.com') && url.includes('/upload/') && !url.includes('/upload/f_auto')) return url.replace('/upload/', `/upload/f_auto,q_auto:good,c_limit,w_${w}/`);
+  return url;
+}
+function coverOf(t){ const m = mediaOf(t.id, 'tour')[0]; return m ? m.img : ''; }
+function coverHtml(t){ const u = coverOf(t); return u ? `<img src="${cImg(u, 800)}" alt="${esc(t.titolo)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : art(t.tema, seedOf(t.id)); }
+function galleryHero(t){
+  const ph = mediaOf(t.id, 'tour'); if(!ph.length) return `<div class="detailhero">${art(t.tema, seedOf(t.id))}</div>`;
+  const i = Math.min(UI.gal||0, ph.length-1);
+  return `<div class="detailhero"><img src="${cImg(ph[i].img, 1600)}" alt="Foto del tour ${esc(t.titolo)}" style="width:100%;height:100%;object-fit:cover"></div>${ph.length>1?`<div class="row" style="margin-top:8px;gap:6px">${ph.map((m,j)=>`<img src="${cImg(m.img, 200)}" onclick="UI.gal=${j};renderAll()" alt="" loading="lazy" style="width:64px;height:48px;object-fit:cover;border-radius:8px;cursor:pointer;${j===i?'outline:2px solid var(--coral)':''}">`).join('')}</div>`:''}`;
+}
+const catOwner = () => { const u = me(); return u && u.ruolo==='admin' ? null : (u||{}).orgId; };
+function catalogoMio(){ const o = catOwner(); return Object.values(S.catalogo).filter(c=> me() && (me().ruolo==='admin' || c.orgId===o || !c.orgId)).sort((a,b)=>a.createdAt<b.createdAt?1:-1); }
+function usoCatalogo(cid){ return Object.values(S.media).filter(m=>m.catalogoId===cid); }
+async function hashFile(f){ try{ const b = await crypto.subtle.digest('SHA-1', await f.arrayBuffer()); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }catch(e){ return ''; } }
+/* riduce peso e misure senza perdere qualità visibile */
+async function prepImage(f){
+  const img = await new Promise((res,rej)=>{ const u = URL.createObjectURL(f), i = new Image(); i.onload = ()=>{ URL.revokeObjectURL(u); res(i); }; i.onerror = rej; i.src = u; });
+  const MAX = 2400, sc = Math.min(1, MAX/Math.max(img.width, img.height));
+  if(sc===1 && f.size < 1.2e6 && /jpe?g|webp/i.test(f.type)) return {blob:f, w:img.width, h:img.height};
+  const c = document.createElement('canvas'); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise(r=>c.toBlob(r, 'image/jpeg', 0.9));
+  return {blob: blob && blob.size < f.size ? blob : f, w:c.width, h:c.height};
+}
+async function cldUpload(blob, nome, fr){
+  const fd = new FormData(); fd.append('file', blob, nome); fd.append('api_key', fr.apiKey); fd.append('timestamp', fr.timestamp); fd.append('folder', fr.folder); fd.append('signature', fr.signature);
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${fr.cloudName}/image/upload`, {method:'POST', body:fd});
+  const j = await r.json(); if(!r.ok) throw new Error((j.error&&j.error.message)||'Caricamento non riuscito'); return j;
+}
+/* carica nel catalogo (ed eventualmente aggiunge al viaggio); salta i doppioni */
+async function caricaFoto(files, tag, dest){
+  files = [...(files||[])].slice(0, 20); if(!files.length) return [];
+  let fr; try{ fr = await api('POST','/cloudinary/firma'); }
+  catch(e){ if(e.status===503){ toast('Cloudinary non è ancora configurato: chiedi all\'amministratore di inserire le chiavi'); return []; } toast(e.message); return []; }
+  const out = []; let n = 0, riusate = 0;
+  for(const f of files){
+    if(!/^image\//.test(f.type)){ toast(f.name+': non è un\'immagine'); continue; }
+    toast(`Caricamento ${++n} di ${files.length}…`);
+    try{
+      const hash = await hashFile(f);
+      let c = hash && catalogoMio().find(x=>x.hash===hash);
+      if(c){ riusate++; }
+      else {
+        const p = await prepImage(f), j = await cldUpload(p.blob, f.name, fr);
+        c = await save('catalogo', {id:uid('ct'), orgId:catOwner(), url:j.secure_url, publicId:j.public_id, w:j.width, h:j.height, kb:Math.round(j.bytes/1024), originaleKb:Math.round(f.size/1024), hash, nome:f.name.replace(/\.[^.]+$/,''), tag:tag||'', createdAt:new Date().toISOString()});
+      }
+      if(dest) await aggiungiDaCatalogo(dest.tid, dest.where, c.id, true);
+      out.push(c);
+    }catch(e){ toast(f.name+': '+e.message); }
+  }
+  toast(`${out.length} foto pronte${riusate?` (${riusate} erano già nel catalogo, non ricaricate)`:''}`);
+  return out;
+}
+async function aggiungiDaCatalogo(tid, where, cid, quiet){
+  const c = S.catalogo[cid]; if(!c) return;
+  if(mediaOf(tid, where).some(m=>m.catalogoId===cid)){ if(!quiet) toast('Questa foto è già nel viaggio'); return; }
+  await save('media', {id:uid('ph'), tourId:tid, where, img:c.url, catalogoId:cid, createdAt:new Date().toISOString()});
+  if(!quiet){ toast('Foto aggiunta'); if(UI.catPick) openCatalogo(UI.catPick.tid, UI.catPick.where); }
+}
+async function uploadMedia(tid, where, input){
+  const t = S.tours[tid]||UI.draft||{};
+  await caricaFoto(input.files, t.destinazione || t.titolo || '', {tid, where});
+  input.value = '';
+}
+async function spostaMedia(id, dir){
+  const m = S.media[id]; const arr = mediaOf(m.tourId, m.where); const i = arr.findIndex(x=>x.id===id), j = i+dir; if(j<0||j>=arr.length) return;
+  const a = arr[i], b = arr[j]; const ta = a.createdAt; await save('media', Object.assign({}, a, {createdAt:b.createdAt})); await save('media', Object.assign({}, b, {createdAt:ta}));
+}
+function mediaEditor(t){
+  if(!S.tours[t.id]) return '<p class="small muted">Salva la bozza per aggiungere le foto.</p>';
+  const box = (where, label) => { const ph = mediaOf(t.id, where); return `<div class="room"><b>${label}</b><div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap">${ph.map((m,k)=>`<span style="position:relative;display:inline-block"><img src="${cImg(m.img,300)}" style="width:120px;height:84px;object-fit:cover;border-radius:8px;${k===0&&where==='tour'?'outline:3px solid var(--coral)':''}" alt="">${k===0&&where==='tour'?'<span class="badge coral" style="position:absolute;left:4px;bottom:4px">Copertina</span>':''}<span style="position:absolute;top:2px;right:2px;display:flex;gap:2px">${k>0?`<button class="btn sm" style="padding:0 6px" title="Sposta prima" onclick="spostaMedia('${m.id}',-1)">◀</button>`:''}<button class="btn sm" style="padding:0 6px" title="Togli dal viaggio (resta nel catalogo)" onclick="remove('media','${m.id}')">×</button></span></span>`).join('')||'<span class="small muted">Nessuna foto</span>'}</div>
+    <div class="row" style="gap:6px"><label class="btn sm pri">⬆️ Carica dal PC<input type="file" accept="image/*" multiple style="display:none" onchange="uploadMedia('${t.id}','${where}',this)"></label><button class="btn sm" onclick="openCatalogo('${t.id}','${where}')">📚 Scegli dal catalogo</button></div></div>`; };
+  return `<p class="small muted">Le foto vanno nel catalogo della tua agenzia: per un viaggio simile le riprendi da lì senza ricaricarle. Vengono alleggerite in automatico mantenendo la qualità.</p>` + box('tour','Galleria del viaggio (la prima è la copertina della card)') + (t.hotel||[]).map((h,i)=>box('h'+i, 'Foto di '+(h.nome||'struttura '+(i+1)))).join('');
+}
+function catGrid(list, onPick, picked){
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${list.map(c=>`<div class="card" style="overflow:hidden;cursor:${onPick?'pointer':'default'};position:relative" ${onPick?`onclick="${onPick(c)}"`:''}><img src="${cImg(c.url,320)}" loading="lazy" alt="" style="width:100%;height:100px;object-fit:cover;display:block">${picked&&picked(c)?'<span class="badge green" style="position:absolute;top:6px;left:6px">✓ nel viaggio</span>':''}${c.orgId?'':'<span class="badge" style="position:absolute;top:6px;right:6px">OVIGO</span>'}<div class="tiny" style="padding:6px 8px"><b>${esc(c.tag||c.nome||'')}</b>${c.tag&&c.nome?`<div class="muted">${esc(c.nome)}</div>`:''}</div></div>`).join('')}</div>`;
+}
+function catFiltra(list){ const q = (UI.catQ||'').toLowerCase().trim(); return q ? list.filter(c=>((c.tag||'')+' '+(c.nome||'')).toLowerCase().includes(q)) : list; }
+function openCatalogo(tid, where){
+  UI.catPick = {tid, where};
+  const list = catFiltra(catalogoMio()), inTour = new Set(mediaOf(tid, where).map(m=>m.catalogoId));
+  openModal(`<h2>Catalogo foto</h2><div class="row" style="gap:8px;margin-bottom:10px"><input id="cat_q" placeholder="Cerca per luogo o nome (es. Matera, hotel, mare)" value="${esc(UI.catQ||'')}" oninput="UI.catQ=this.value;clearTimeout(window._cq);window._cq=setTimeout(()=>{openCatalogo('${tid}','${where}');const e=document.getElementById('cat_q');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},250)" style="flex:1"><label class="btn sm">⬆️ Carica nuove<input type="file" accept="image/*" multiple style="display:none" onchange="caricaFoto(this.files,'${esc(((S.tours[tid]||{}).destinazione||(S.tours[tid]||{}).titolo||'').replace(/'/g,''))}',{tid:'${tid}',where:'${where}'}).then(()=>openCatalogo('${tid}','${where}'))"></label></div>
+  <p class="small muted">Clicca una foto per aggiungerla al viaggio. ${list.length} foto.</p>
+  <div style="max-height:60vh;overflow:auto">${list.length?catGrid(list, c=>`aggiungiDaCatalogo('${tid}','${where}','${c.id}')`, c=>inTour.has(c.id)):'<div class="empty small">Nessuna foto: caricane qualcuna.</div>'}</div>
+  <div class="row" style="margin-top:12px"><button class="btn pri" onclick="UI.catPick=null;closeModal()">Fatto</button></div>`);
+}
+function catalogoPagina(){
+  const list = catFiltra(catalogoMio()), tot = list.reduce((s,c)=>s+(c.kb||0),0), orig = list.reduce((s,c)=>s+(c.originaleKb||c.kb||0),0);
+  return `<h2>📷 Catalogo foto</h2><p class="small muted">Tutte le foto della ${me().ruolo==='admin'?'piattaforma (quelle «OVIGO» le vedono tutte le agenzie)':'tua agenzia, più quelle messe a disposizione da OVIGO'}. Una foto caricata qui si usa in tutti i viaggi che vuoi.</p>
+  <div class="grid g3" style="margin:12px 0"><div class="card kpi"><div class="v">${list.length}</div><div class="l">Foto</div></div><div class="card kpi"><div class="v">${(tot/1024).toFixed(1)} MB</div><div class="l">Spazio occupato</div></div><div class="card kpi"><div class="v">${orig?Math.round((1-tot/orig)*100):0}%</div><div class="l">Peso risparmiato rispetto agli originali</div></div></div>
+  <div class="card pad" style="margin-bottom:14px"><div class="row" style="gap:8px;align-items:end;flex-wrap:wrap"><div class="field" style="flex:1;min-width:220px;margin:0"><label>Luogo o argomento delle nuove foto</label><input id="cat_tag" placeholder="Es. Matera, Sassi"></div><label class="btn pri">⬆️ Carica foto dal PC<input type="file" accept="image/*" multiple style="display:none" onchange="caricaFoto(this.files, val('cat_tag')).then(()=>renderAll())"></label></div></div>
+  <input placeholder="Cerca nel catalogo…" value="${esc(UI.catQ||'')}" oninput="UI.catQ=this.value;clearTimeout(window._cq);window._cq=setTimeout(renderAll,300)" style="margin-bottom:10px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px">${list.map(c=>{ const uso = usoCatalogo(c.id), mio = me().ruolo==='admin' || c.orgId===catOwner(); return `<div class="card" style="overflow:hidden"><img src="${cImg(c.url,400)}" loading="lazy" alt="" style="width:100%;height:120px;object-fit:cover;display:block"><div style="padding:8px">
+    ${mio?`<input value="${esc(c.tag||'')}" placeholder="Luogo / argomento" onchange="save('catalogo', Object.assign({}, S.catalogo['${c.id}'], {tag:this.value}))" style="padding:5px 8px;font-size:.8rem">`:`<b class="small">${esc(c.tag||'')}</b> <span class="badge">OVIGO</span>`}
+    <div class="tiny muted" style="margin-top:4px">${c.w||'?'}×${c.h||'?'} px · ${c.kb||'?'} KB · ${uso.length?`usata in ${uso.length} viaggi`:'non usata'}</div>
+    ${mio?`<div class="row" style="gap:4px;margin-top:6px"><a class="tiny" href="${cImg(c.url,2400)}" target="_blank" rel="noopener">Apri</a>${uso.length?'':` · <a class="tiny" style="cursor:pointer;color:var(--red)" onclick="eliminaFotoCatalogo('${c.id}')">Elimina</a>`}</div>`:''}</div></div>`; }).join('') || '<div class="empty small">Il catalogo è vuoto.</div>'}</div>`;
+}
+async function eliminaFotoCatalogo(id){
+  if(usoCatalogo(id).length){ toast('È usata in un viaggio: toglila prima dal viaggio'); return; }
+  await remove('catalogo', id); toast('Foto eliminata');
+}
+function crmCatalogo(){ return catalogoPagina(); }
+ADMIN_SECTIONS.catalogo = ['Catalogo foto', catalogoPagina];
+/* duplicando un viaggio si copiano anche le foto (nessun nuovo caricamento) */
+const _dupTourReal = dupTour;
+dupTour = async function(id){
+  const prima = new Set(Object.keys(S.tours));
+  await _dupTourReal(id);
+  const nuovo = Object.keys(S.tours).find(k=>!prima.has(k)); if(!nuovo) return;
+  for(const m of Object.values(S.media).filter(m=>m.tourId===id)) await save('media', Object.assign({}, m, {id:uid('ph'), tourId:nuovo}));
+};
 
 
 /* ============ AVVIO ============ */

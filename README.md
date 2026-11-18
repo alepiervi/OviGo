@@ -26,7 +26,7 @@ Dockerfile               per mettere tutto online come un unico servizio
 |---|---|---|
 | Visitatore | senza account | viaggi pubblicati, guide |
 | Cliente | si registra da solo | le sue prenotazioni, i suoi pagamenti, i gruppi a cui partecipa |
-| Agenzia | si registra come azienda, l'admin la verifica | i suoi tour, i suoi clienti, i bonifici in arrivo |
+| Agenzia | si registra come azienda, l'admin la verifica | i suoi tour, i suoi clienti, i bonifici in arrivo, il suo catalogo foto |
 | Collaboratore | creato dall'agenzia, riceve l'invito via email | i dati della sua agenzia |
 | Accompagnatore | creato **solo** dall'admin (Admin → Accompagnatori) o dall'agenzia che organizza il viaggio; riceve l'invito via email | solo i viaggi a cui è assegnato |
 | Admin | creato al primo avvio (ADMIN_EMAIL) | tutto, commissioni, verifiche |
@@ -46,6 +46,19 @@ Un'agenzia può assegnare ai suoi viaggi solo i propri accompagnatori o quelli c
 
 In alternativa, l'admin può scegliere «Il cliente paga tutto all'agenzia, OVIGO fattura la commissione all'agenzia»: così il cliente fa un solo bonifico.
 Funziona allo stesso modo per acconto, saldo, rate, quota divisa (anche chi riceve il link senza account) e buoni regalo (pagati interamente a OVIGO).
+
+## Foto (Cloudinary + catalogo)
+
+- L'agenzia carica le foto dal PC nel tour (scheda **Foto**) o da **CRM → Catalogo foto**.
+- Prima dell'invio il browser porta la foto a massimo 2400 pixel di lato, con qualità alta. Una foto da telefono da 5–15 MB diventa circa 0,5–2,5 MB.
+- La foto va **direttamente su Cloudinary**: il server firma solo il permesso, quindi il database non si appesantisce.
+- Le pagine chiedono a Cloudinary la misura che serve: 800 px per le card, 1600 px per la pagina del viaggio. Cloudinary manda il formato più leggero che il browser supporta (WebP/AVIF) e usa la compressione `q_auto:good`, che non si vede a occhio.
+- **Catalogo**: ogni foto resta nel catalogo dell'agenzia con il luogo o l'argomento ("Matera", "Hotel Subasio"…). Per un altro viaggio si sceglie dal catalogo, senza ricaricarla.
+- Se si carica di nuovo la stessa foto, il sistema la riconosce e non la duplica.
+- Duplicando un viaggio si copiano anche le foto.
+- L'admin può caricare foto «OVIGO» che vedono tutte le agenzie.
+- Una foto usata in un viaggio non si può eliminare dal catalogo: prima va tolta dal viaggio.
+- Serve la variabile `CLOUDINARY_URL` (su cloudinary.com → Dashboard → *API Environment variable*).
 
 ## Email (Brevo)
 
