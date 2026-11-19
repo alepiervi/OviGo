@@ -65,6 +65,11 @@ Funziona allo stesso modo per acconto, saldo, rate, quota divisa (anche chi rice
 Partono da sole: conferma dell'indirizzo, password dimenticata, inviti di agenzie e accompagnatori, e ogni notifica (prenotazioni, bonifici, conferme di partenza, sconti di gruppo…).
 Servono `BREVO_API_KEY` e `MAIL_FROM` (un mittente verificato su Brevo). Senza chiave il sistema funziona lo stesso, ma non manda email.
 
+## App per telefono e tablet (senza store)
+
+Il sito si installa come app: menu «📲 Scarica l'app» (Android/Chrome: «Installa app»; iPhone/iPad: Safari → Condividi → «Aggiungi alla schermata Home»).
+Dall'app ogni utente attiva le notifiche push: ogni notifica di OVIGO arriva anche sul telefono. Servono `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` nel `.env`.
+
 ## Provarlo sul computer
 
 Servono Python 3.11+ e MongoDB (oppure un database gratuito su MongoDB Atlas).

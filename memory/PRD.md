@@ -9,6 +9,11 @@
 - NEW admin section "Dati di prova" (GET/DELETE /api/admin/demo): counts and one-click delete of demo data and linked docs; once deleted, demo data is not loaded again on restart (db.meta demo_rimossa)
 - Deleting a user now also removes their login record
 - Tested: 15/15 backend tests, main frontend flows, demo delete checked by hand, then demo data loaded again
+## Done (2026-06, iteration 2) – telefono, tablet e app installabile
+- app-mobile.css/js: menu ☰ sul sito, menu a scomparsa nelle aree riservate, tabelle che scorrono di lato, header centrato, niente pagina che esce dallo schermo
+- PWA (manifest, icone, sw.js): installabile su Android/iOS/desktop senza store; modale «Scarica l'app» + banner in basso
+- Web Push con VAPID (pywebpush): /api/push/chiave|iscrivi|disiscrivi|stato|prova; ogni nuova notifica (notify() + PUT notifications) arriva anche come push a user/org/admin
+- iOS: notifiche solo dopo «Aggiungi alla schermata Home» (iOS 16.4+)
 ## Backlog
 - P1: add BREVO_API_KEY, MAIL_FROM (emails), CLOUDINARY_URL (photos), PUBLIC_URL after deploy
 - P2: original design issues: search form overflows on mobile, header nav alignment, "Ho cliccato il link (simula)" label

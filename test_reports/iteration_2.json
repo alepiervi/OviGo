@@ -1,0 +1,43 @@
+{
+  "summary": "Tested the PWA, web push API and the phone/tablet layout. Backend: 32 of 34 pytest checks pass (new file test_ovigo_push.py plus the core regression file). The two failures are 500 errors on malformed request bodies. Frontend: the manifest, icons, service worker registration (active, scope /) and the apple meta tags are all fine. At 390px (iPhone and Android user agents) there is no horizontal overflow on home, #cerca, #tour-t_trentino, or in any sidebar section of #cliente (20), #crm (26) and #admin (24). Wide tables scroll inside their container. The hamburger opens main-nav and closes after a link is clicked. sidebar-toggle-btn expands the section list and collapses it after a section is chosen. app-modal fits the screen (8 to 382px) and shows the iOS Safari steps or the Android Chrome steps depending on the user agent. Logged out it asks the user to log in. app-banner shows on mobile user agents, and the close button hides it for good (localStorage ovigo-nb-app=no). The desktop header nav is NOT vertically centred: at 1280, 1568, 1920, 1024 and 820 the link centres sit at y=12-14px while the logo centre is at y=32px.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/push/iscrivi", "issue": "A body that is not valid JSON returns 500 (request.json() raises JSONDecodeError and nothing catches it). It should return 400."},
+      {"endpoint": "POST /api/push/disiscrivi", "issue": "A body that is not an object (e.g. a list) returns 500 with AttributeError: 'list' object has no attribute 'get' (server.py line 265). Add an isinstance(body, dict) check and wrap request.json() in try/except."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Desktop/tablet header nav", "issue": "The nav links are still stuck near the top: link centre at 14px vs logo centre at 32px in a 64px header, at 820-1920px. Root cause: <nav class=\"main\"> also matches the reserved-area content rule `.main{padding:24px 28px 60px}` (index.html line 166) and `.main{padding:20px 18px 60px}` (app-mobile.css line 13, at <=1024px). The nav gets 84px of padding plus height, its top lands at -10px, and overflow:hidden keeps the links at the top. The `height:64px;align-self:center` fix in app-mobile.css line 7 does not help. Fix: add `header.site nav.main{padding:0}` and keep the open-menu padding rule, or rename the nav class.", "selector": "[data-testid=main-nav]", "priority": "HIGH"},
+      {"component": "sidebar-toggle-btn label", "issue": "In the CRM the label shows the section's badge count (e.g. \"Richieste e liste d'attesa\\n1 · altre sezioni\"). The /\\d+$/ strip does not work, probably because of whitespace after the badge. Fix: trim before the regex, or read only the link's own text node.", "selector": "[data-testid=sidebar-toggle-btn]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Turning off push notifications (from code review; headless Chromium forces Notification.permission='denied', so this could not be run)", "issue": "disablePush() unsubscribes and sets syncedFor=''. The permission stays 'granted', so the next renderAll() calls syncPush(), which subscribes the device again and re-registers it on the server. 'Disattiva su questo dispositivo' therefore does not stick. Also, openAppModal shows 'Notifiche attive' whenever permission is granted, even when there is no subscription. Store an opt-out flag (e.g. localStorage ovigo-push-off) and check it in syncPush, and check pushManager.getSubscription() before saying notifications are on.", "affected_selectors": ["[data-testid=push-off-btn]", "[data-testid=push-active]"]}
+    ],
+    "design_issues": [
+      {"screen": "Mobile, all pages", "issues": ["The fixed app-banner (about 100px) covers the bottom of the page content and there is no matching body padding-bottom while it is shown. The content under it is only reachable after closing the banner.", "The home search form uses the browser's native date pickers (input type=date, mm/dd/yyyy). This was already there before this change."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ovigo_push.py", "/app/backend/tests/test_ovigo_core.py", "/app/test_reports/pytest/pytest_push.xml"],
+  "action_items": [
+    "Add `header.site nav.main{padding:0}` (or rename the nav class) so the desktop/tablet nav is vertically centred.",
+    "Make 'Disattiva notifiche' persistent so syncPush does not subscribe the device again.",
+    "Return 400 instead of 500 for malformed or non-object JSON on /api/push/iscrivi and /api/push/disiscrivi.",
+    "Strip the badge count from the sidebar-toggle-btn label.",
+    "Optional: add body padding-bottom while #appbanner.on is shown."
+  ],
+  "critical_code_review_comments": [
+    "fire() uses create_task without keeping a reference, so background push/email tasks can be garbage-collected before they finish. Keep a set of the tasks.",
+    "push_to_uids sends to every subscription one after another (one thread call each, 10s timeout). For org or admin notifications with many devices this is slow. It runs in the background, so it is acceptable for now.",
+    "The login form inputs (#lg_mail, #lg_pw) and the Accedi button have no data-testid.",
+    "index.html is about 4400 lines in one file. This was already the case."
+  ],
+  "updated_files": ["/app/backend/tests/test_ovigo_push.py"],
+  "success_rate": {"backend": "94% (32/34)", "frontend": "about 85% (the header centring requirement fails, everything else tested passes)"},
+  "seed_data_creation": "None kept. Test push subscriptions used fake endpoints containing 'TEST_fake'. They were removed through /api/push/disiscrivi; FCM 404 also triggers automatic deletion. db.push count afterwards was 0. The test notification TEST_n_* was deleted by its id.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "In this SPA you log in through the UI: openAuth('login'), fill #lg_mail/#lg_pw, call doLogin(). Putting the token in localStorage beforehand did not log the session in (CUR stayed empty). Navigate with go('cliente'|'crm'|'admin'|'cerca') or go('tour','t_trentino'). Headless Chromium always reports Notification.permission='denied', even after grant_permissions, so the granted path (push-enable, push-test, push-off) cannot be run end to end. To measure real overflow, temporarily set html/body overflowX to visible, because app-mobile.css hides overflow-x. Do NOT run DELETE /api/admin/demo.",
+  "rca of the issue": "Header nav not centred: the class name collides. nav.main matches the generic .main content-area rule, which adds 24px top and 60px bottom padding (20/60 at <=1024px). The nav becomes 84px tall in a 64px flex row, is centred at -10px, and overflow:hidden clips it, so the links appear at the top. Reproduce: at 1280x800 the nav.main computed padding is '24px 28px 60px' and its height is 84px. Fix: header.site nav.main{padding:0}."
+}

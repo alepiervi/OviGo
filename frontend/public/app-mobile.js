@@ -32,9 +32,10 @@
     const sb = document.querySelector('#root .sidebar');
     if(sb && !sb.querySelector('.sb-toggle')){
       const active = sb.querySelector('a.on');
+      const label = active ? [...active.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim() : '';
       const b = document.createElement('button');
       b.className = 'btn sb-toggle'; b.setAttribute('data-testid', 'sidebar-toggle-btn');
-      b.innerHTML = '☰ ' + (active ? esc(active.textContent.replace(/\d+$/, '').trim()) + ' · altre sezioni' : 'Sezioni');
+      b.innerHTML = '☰ ' + (label ? esc(label) + ' · altre sezioni' : 'Sezioni');
       b.onclick = () => document.body.classList.toggle('sb-open');
       const who = sb.querySelector('.who');
       who ? who.after(b) : sb.prepend(b);
@@ -61,16 +62,18 @@
     let el = document.getElementById('appbanner');
     if(!el){ el = document.createElement('div'); el.id = 'appbanner'; el.setAttribute('data-testid', 'app-banner'); document.body.appendChild(el); }
     const s = bannerState();
-    if(!s){ el.classList.remove('on'); return; }
+    if(!s){ el.classList.remove('on'); document.body.classList.remove('ab-on'); return; }
     el.innerHTML = s === 'app'
       ? `<img src="/icon-192.png" alt=""><div class="t"><b>Scarica l'app OVIGO</b>Sul telefono, con le notifiche dei tuoi viaggi. Senza store.</div><button class="btn pri sm" data-testid="app-banner-install-btn" onclick="openAppModal()">Installa</button><button class="x" data-testid="app-banner-close-btn" aria-label="Chiudi" onclick="appBannerNo('app')">×</button>`
       : `<img src="/icon-192.png" alt=""><div class="t"><b>Attiva le notifiche</b>Ricevi subito conferme, bonifici e avvisi di viaggio.</div><button class="btn pri sm" data-testid="app-banner-push-btn" onclick="enablePush()">Attiva</button><button class="x" data-testid="app-banner-close-btn" aria-label="Chiudi" onclick="appBannerNo('push')">×</button>`;
-    el.classList.add('on');
+    el.classList.add('on'); document.body.classList.add('ab-on');
   }
   window.appBannerNo = k => { ls('ovigo-nb-' + k, 'no'); banner(); };
 
   /* ---------- finestra «Scarica l'app» ---------- */
-  window.openAppModal = function(){
+  window.openAppModal = async function(){
+    let hasSub = false;
+    try{ const r = PUSH_OK && await navigator.serviceWorker.getRegistration('/'); hasSub = !!(r && await r.pushManager.getSubscription()) && ls('ovigo-push-off') !== '1'; }catch(e){}
     let inst;
     if(STANDALONE()) inst = `<div class="notice green">✓ Stai già usando l'app OVIGO installata.</div>`;
     else if(installEvt) inst = `<p>Un tocco e OVIGO compare tra le app del telefono, del tablet o del computer, con la sua icona.</p><button class="btn pri" data-testid="app-install-btn" onclick="installApp()">📲 Installa l'app</button>`;
@@ -81,7 +84,7 @@
     if(!PUSH_OK) push = `<p class="small muted">${IOS && !STANDALONE() ? "Su iPhone e iPad le notifiche si attivano dopo aver installato l'app sulla Home e averla aperta dall'icona." : 'Questo browser non supporta le notifiche.'}</p>`;
     else if(!me()) push = `<p class="small muted">Accedi al tuo account per attivare le notifiche su questo dispositivo.</p><button class="btn" onclick="closeModal();openAuth('login')">Accedi</button>`;
     else if(Notification.permission === 'denied') push = `<div class="notice">Le notifiche sono bloccate per OVIGO. Riattivale dalle impostazioni del telefono o del browser (Notifiche → OVIGO), poi torna qui.</div>`;
-    else if(Notification.permission === 'granted') push = `<div class="notice green" data-testid="push-active">✓ Notifiche attive su questo dispositivo.</div><div class="row" style="margin-top:10px"><button class="btn sm" data-testid="push-test-btn" onclick="testPush()">Invia una notifica di prova</button><button class="btn sm ghost" data-testid="push-off-btn" onclick="disablePush()">Disattiva su questo dispositivo</button></div>`;
+    else if(Notification.permission === 'granted' && hasSub) push = `<div class="notice green" data-testid="push-active">✓ Notifiche attive su questo dispositivo.</div><div class="row" style="margin-top:10px"><button class="btn sm" data-testid="push-test-btn" onclick="testPush()">Invia una notifica di prova</button><button class="btn sm ghost" data-testid="push-off-btn" onclick="disablePush()">Disattiva su questo dispositivo</button></div>`;
     else push = `<p>Ricevi sul telefono le conferme di prenotazione, i bonifici ricevuti, le partenze confermate e gli avvisi del viaggio.</p><button class="btn dark" data-testid="push-enable-btn" onclick="enablePush()">🔔 Attiva le notifiche</button>`;
     openModal(`<div data-testid="app-modal"><h2>📲 L'app OVIGO</h2><p class="small muted">Funziona su telefono, tablet e computer. Non serve passare da App Store o Google Play: si installa direttamente da qui.</p>
       <h3 style="margin-top:18px">1 · Installa</h3>${inst}
@@ -116,6 +119,7 @@
       const p = await Notification.requestPermission();
       if(p !== 'granted'){ toast('Notifiche non autorizzate'); banner(); return; }
       await subscribeAndSend();
+      ls('ovigo-push-off', '0');
       toast('Notifiche attivate su questo dispositivo');
       if(document.getElementById('modal').classList.contains('on')) openAppModal();
     }catch(e){ toast('Attivazione non riuscita: ' + e.message); }
@@ -136,11 +140,11 @@
   window.disablePush = async function(){
     await unsubscribeThisDevice();
     try{ const r = await navigator.serviceWorker.getRegistration('/'); const s = r && await r.pushManager.getSubscription(); if(s) await s.unsubscribe(); }catch(e){}
-    syncedFor = ''; toast('Notifiche disattivate su questo dispositivo'); closeModal();
+    syncedFor = ''; ls('ovigo-push-off', '1'); toast('Notifiche disattivate su questo dispositivo'); closeModal();
   };
   // se il permesso c'è già, collega questo dispositivo all'account con cui si è entrati
   function syncPush(){
-    if(!PUSH_OK || !swReg || !CUR || !TOKEN || syncedFor === CUR || Notification.permission !== 'granted') return;
+    if(!PUSH_OK || !swReg || !CUR || !TOKEN || syncedFor === CUR || Notification.permission !== 'granted' || ls('ovigo-push-off') === '1') return;
     syncedFor = CUR;
     subscribeAndSend().catch(() => { syncedFor = ''; });
   }

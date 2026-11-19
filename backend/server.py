@@ -176,11 +176,26 @@ async def send_mail(to_email: str, to_name: str, subject: str, html: str):
         log.warning("Brevo errore: %s", e)
 
 
+_BG = set()
+
+
 def fire(coro):
     try:
-        asyncio.get_running_loop().create_task(coro)
+        t = asyncio.get_running_loop().create_task(coro)
+        _BG.add(t)
+        t.add_done_callback(_BG.discard)
     except RuntimeError:
         pass
+
+
+async def json_obj(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Dati non validi")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Dati non validi")
+    return body
 
 
 async def notify(to: str, testo: str, extra: Optional[dict] = None, url: str = ""):
@@ -249,8 +264,8 @@ async def push_key():
 @app.post("/api/push/iscrivi")
 async def push_subscribe(request: Request):
     u = await need_user(request)
-    sub = await request.json()
-    if not isinstance(sub, dict) or not str(sub.get("endpoint", "")).startswith("https://") or not isinstance(sub.get("keys"), dict):
+    sub = await json_obj(request)
+    if not str(sub.get("endpoint", "")).startswith("https://") or not isinstance(sub.get("keys"), dict):
         raise HTTPException(400, "Iscrizione non valida")
     sub = {"endpoint": sub["endpoint"], "keys": {k: str(v) for k, v in sub["keys"].items() if k in ("p256dh", "auth")}}
     key = hashlib.sha256(sub["endpoint"].encode()).hexdigest()
@@ -261,7 +276,7 @@ async def push_subscribe(request: Request):
 @app.post("/api/push/disiscrivi")
 async def push_unsubscribe(request: Request):
     u = await need_user(request)
-    body = await request.json()
+    body = await json_obj(request)
     key = hashlib.sha256(str(body.get("endpoint", "")).encode()).hexdigest()
     await db.push.delete_one({"_id": key, "uid": u["id"]})
     return {"ok": True}
