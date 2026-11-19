@@ -1528,6 +1528,58 @@ async def cloudinary_destroy(public_id: str):
         log.warning("Cloudinary destroy: %s", e)
 
 
+# ------------------------------------------------------------------ notifica a tutto il gruppo di un viaggio
+async def group_recipients(tid: str) -> set:
+    ids = set()
+    async for b in db.bookings.find({"tourId": tid, "tipo": "prenotazione", "stato": {"$ne": "annullata"}}):
+        if b.get("userId"):
+            ids.add(b["userId"])
+        for p in (b.get("partecipanti") or []):
+            if isinstance(p, dict) and p.get("userId"):
+                ids.add(p["userId"])
+    return ids
+
+
+async def group_tour(request: Request, tid: str):
+    u = await need_user(request)
+    ctx = await make_ctx(u)
+    t = await raw_get("tours", tid)
+    if not t or not (ctx.admin or org_of_tour(ctx, tid)):
+        deny()
+    return u, t
+
+
+@app.get("/api/tour/{tid}/gruppo")
+async def group_info(tid: str, request: Request):
+    _, t = await group_tour(request, tid)
+    ids = list(await group_recipients(tid))
+    con_app = len(await db.push.distinct("uid", {"uid": {"$in": ids}})) if ids else 0
+    storico = [{"testo": m["testo"], "at": m["at"], "destinatari": m["destinatari"], "conApp": m.get("conApp", 0), "da": m.get("da", "")}
+               async for m in db.avvisi_gruppo.find({"tourId": tid}).sort("at", -1).limit(20)]
+    return {"iscritti": len(ids), "conApp": con_app, "storico": storico}
+
+
+@app.post("/api/tour/{tid}/gruppo")
+async def group_send(tid: str, request: Request):
+    u, t = await group_tour(request, tid)
+    body = await json_obj(request)
+    testo = str(body.get("testo", "")).strip()
+    if not testo:
+        raise HTTPException(400, "Scrivi il messaggio")
+    if len(testo) > 500:
+        raise HTTPException(400, "Messaggio troppo lungo (massimo 500 caratteri)")
+    ids = list(await group_recipients(tid))
+    if not ids:
+        raise HTTPException(400, "Nessun iscritto a questo viaggio")
+    org = await raw_get("orgs", t.get("orgId", "")) or {}
+    for uid in ids:
+        await notify("user:" + uid, f"📲 {org.get('nome', 'OVIGO')} per «{t.get('titolo', '')}»: {testo}", {"tourId": tid, "canale": "app"})
+    con_app = len(await db.push.distinct("uid", {"uid": {"$in": ids}}))
+    await db.avvisi_gruppo.insert_one({"_id": new_id("g"), "tourId": tid, "orgId": t.get("orgId"), "testo": testo, "by": u["id"],
+                                       "da": f"{u.get('nome', '')} {u.get('cognome', '')}".strip(), "at": iso_now(), "destinatari": len(ids), "conApp": con_app})
+    return {"ok": True, "destinatari": len(ids), "conApp": con_app}
+
+
 # ------------------------------------------------------------------ dati di prova (solo admin)
 def demo_ids() -> dict:
     p = ROOT / "demo_seed.json"

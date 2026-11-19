@@ -1269,6 +1269,7 @@ function viewCrm(){
   else if(sub==='prenotazioni') main = crmBookings(o);
   else if(sub==='rooming') main = crmRooming(o);
   else if(sub==='comunicazioni') main = crmComms(o);
+  else if(sub==='notificaGruppo') main = crmGroupPush(o);
   else if(sub==='statistiche') main = crmStats(o);
   else if(sub==='recensioni') main = crmReviews(o);
   else if(sub==='notifiche') main = notifList('org:'+o.id);
@@ -1303,6 +1304,7 @@ function viewCrm(){
     ${sideLink('roomingEdit','Rooming per hotel')}
     ${sideLink('documenti','Documenti clienti', Object.values(S.bookings).filter(b=>b.orgId===o.id).reduce((s,b)=>s+Object.values(b.documenti||{}).filter(f=>f.stato==='da_verificare').length,0))}
     ${sideLink('comunicazioni','Convocazioni e voucher')}
+    ${sideLink('notificaGruppo','📲 Notifica al gruppo')}
     ${sideLink('pratiche','Contratti, fatture e pratiche')}
     ${sideLink('accompagnatori','Accompagnatori')}
     ${sideLink('imprevisti','Imprevisti', Object.values(S.eventi).filter(e=>e.orgId===o.id&&e.stato!=='risolto').length)}
@@ -1350,7 +1352,7 @@ function crmDashboard(o){
 function toursTable(list){
   if(!list.length) return '<div class="empty">Nessun tour. <a style="cursor:pointer" onclick="newTour()">Creane uno</a></div>';
   return `<div class="card" style="overflow-x:auto"><table><tr><th>Tour</th><th>Partenza</th><th>Iscritti / minimo</th><th class="num">Venduto</th><th>Stato</th><th></th></tr>
-  ${list.map(t=>{ const cap=capacity(t), occ=occupied(t); return `<tr><td><b>${esc(t.titolo)}</b><div class="tiny muted">${TIPI[t.tipo]}</div></td><td class="small">${fdate(t.dataInizio,'y')}</td><td style="min-width:160px"><div class="small">${occ}/${cap} · min ${t.minPartecipanti}</div><div class="fill ${confirmed(t)?'ok':''}"><i style="width:${cap?occ/cap*100:0}%"></i></div></td><td class="num">${eur(tourRevenue(t))}</td><td>${t.stato==='pubblicato'?(confirmed(t)?'<span class="badge green">Confermato</span>':'<span class="badge">Pubblicato</span>'):t.stato==='annullato'?'<span class="badge red">Annullato</span>':'<span class="badge gray">Bozza</span>'}</td><td class="num"><button class="btn sm" onclick="editTour('${t.id}')">Modifica</button></td></tr>`; }).join('')}</table></div>`;
+  ${list.map(t=>{ const cap=capacity(t), occ=occupied(t); return `<tr><td><b>${esc(t.titolo)}</b><div class="tiny muted">${TIPI[t.tipo]}</div></td><td class="small">${fdate(t.dataInizio,'y')}</td><td style="min-width:160px"><div class="small">${occ}/${cap} · min ${t.minPartecipanti}</div><div class="fill ${confirmed(t)?'ok':''}"><i style="width:${cap?occ/cap*100:0}%"></i></div></td><td class="num">${eur(tourRevenue(t))}</td><td>${t.stato==='pubblicato'?(confirmed(t)?'<span class="badge green">Confermato</span>':'<span class="badge">Pubblicato</span>'):t.stato==='annullato'?'<span class="badge red">Annullato</span>':'<span class="badge gray">Bozza</span>'}</td><td class="num"><button class="btn sm ghost" data-testid="tour-notify-btn-${t.id}" title="Notifica sul telefono a tutti gli iscritti" onclick="UI.gp='${t.id}';UI.sub='notificaGruppo';renderAll()">📲 Notifica</button><button class="btn sm" onclick="editTour('${t.id}')">Modifica</button></td></tr>`; }).join('')}</table></div>`;
 }
 function crmTours(o){
   const all = orgTours(o.id), f = UI.tf||'prossimi';
@@ -4418,6 +4420,57 @@ async function adminDemoDelete(){
   catch(e){ toast('Eliminazione non riuscita: '+e.message); }
 }
 ADMIN_SECTIONS.demo = ['Dati di prova', adminDemo];
+
+/* ---------- Organizzatore: notifica sul telefono a tutto il gruppo ---------- */
+const GP_INFO = {};
+const GP_MODELLI = [
+  ['🚌 Ritardo pullman', 'Il pullman è in ritardo di circa 20 minuti. Restate al punto di raccolta, vi aggiorniamo a breve.'],
+  ['🕗 Cambio orario', 'Cambio di orario: il ritrovo di domani è anticipato alle ore 7:30, stesso punto di raccolta.'],
+  ['🪪 Documenti', 'Promemoria: portate con voi un documento d\'identità valido e la tessera sanitaria.'],
+  ['☔ Meteo', 'Domani è prevista pioggia: portate un ombrello o un k-way.'],
+  ['📍 Ritrovo', 'Siamo arrivati: ci ritroviamo tutti davanti all\'ingresso principale tra 10 minuti.']
+];
+function gpLoad(tid, force){
+  if(!force && GP_INFO[tid]) return;
+  GP_INFO[tid] = GP_INFO[tid] || {loading:true};
+  api('GET','/tour/'+encodeURIComponent(tid)+'/gruppo').then(j=>{ GP_INFO[tid] = j; renderAll(); }).catch(e=>{ GP_INFO[tid] = {errore:e.message}; renderAll(); });
+}
+function crmGroupPush(o){
+  const p = tourPicker(o,'gp'), t = S.tours[p.cur];
+  if(!t) return '<h2>📲 Notifica al gruppo</h2><div class="empty">Nessun viaggio.</div>';
+  gpLoad(t.id);
+  const g = GP_INFO[t.id] || {}, draft = UI.gpTxt || '';
+  const info = g.loading ? '<span class="small muted">Conto gli iscritti…</span>' : g.errore ? `<span class="small" style="color:var(--red)">${esc(g.errore)}</span>`
+    : `<div class="grid g2" style="margin:4px 0 14px"><div class="card kpi"><div class="v" data-testid="gp-iscritti">${g.iscritti}</div><div class="l">Iscritti che ricevono il messaggio</div></div><div class="card kpi"><div class="v" data-testid="gp-con-app">${g.conApp}</div><div class="l">Con l'app e le notifiche attive sul telefono</div></div></div>`;
+  return `<h2>📲 Notifica al gruppo</h2><p class="small muted">Scrivi un messaggio: arriva subito come notifica sul telefono a tutti gli iscritti del viaggio che hanno l'app OVIGO. Gli altri lo trovano nella loro area cliente (e via email, se attiva). I recapiti dei partecipanti non vengono mostrati a nessuno.</p>
+  <div class="row" style="margin:12px 0">${p.html}</div>
+  ${info}
+  <div class="card pad" style="max-width:720px">
+    <label>Modelli veloci</label>
+    <div class="chips" style="margin-bottom:10px">${GP_MODELLI.map(([l,m],i)=>`<span class="chip" data-testid="gp-modello-${i}" onclick="gpUse(${i})">${l}</span>`).join('')}</div>
+    <div class="field"><label for="gp_txt">Messaggio</label><textarea id="gp_txt" data-testid="gp-text" maxlength="500" style="min-height:110px" placeholder="Es. Il pullman parte tra 15 minuti dal parcheggio dell'hotel" onfocus="UI.editing=true" onblur="UI.editing=false" oninput="UI.gpTxt=this.value;document.getElementById('gp_cnt').textContent=this.value.length+'/500'">${esc(draft)}</textarea><div class="tiny muted" id="gp_cnt" style="text-align:right">${draft.length}/500</div></div>
+    <button class="btn pri" data-testid="gp-send-btn" ${g.iscritti===0?'disabled':''} onclick="gpSend('${t.id}')">📲 Invia a ${g.iscritti!=null?g.iscritti:''} iscritti</button>
+  </div>
+  <h3 style="margin-top:22px">Messaggi inviati</h3>
+  <div class="card list" data-testid="gp-storico">${(g.storico||[]).map(m=>`<div class="item"><div>${esc(m.testo)}</div><div class="tiny muted">${ago(m.at)}${m.da?' · '+esc(m.da):''} · a ${m.destinatari} iscritti · ${m.conApp} sul telefono</div></div>`).join('') || '<div class="item small muted">Nessun messaggio inviato per questo viaggio.</div>'}</div>`;
+}
+function gpUse(i){ UI.gpTxt = GP_MODELLI[i][1]; renderAll(); const e = document.getElementById('gp_txt'); if(e){ e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }
+async function gpSend(tid){
+  const testo = val('gp_txt'); if(!testo){ toast('Scrivi il messaggio'); return; }
+  const g = GP_INFO[tid] || {};
+  if(!confirm(`Inviare la notifica a ${g.iscritti!=null?g.iscritti:'tutti gli'} iscritti di «${S.tours[tid].titolo}»?`)) return;
+  try{
+    const j = await api('POST','/tour/'+encodeURIComponent(tid)+'/gruppo', {testo});
+    UI.gpTxt = ''; toast(`Inviato a ${j.destinatari} iscritti · ${j.conApp} lo ricevono sul telefono`);
+    gpLoad(tid, true); syncNow(false);
+  }catch(e){ toast('Invio non riuscito: '+e.message); }
+}
+async function sendGroupMsg(tid){
+  const t = S.tours[tid], m = val('gm_txt'), when = val('gm_when'); if(!m) return;
+  if(when && new Date(when) > new Date()){ await save('programmati', {id:uid('q'), orgId:t.orgId, tourId:tid, tipo:'messaggio', testo:m, quando:new Date(when).toISOString(), stato:'programmato', createdAt:new Date().toISOString()}); toast('Messaggio programmato'); return; }
+  try{ const j = await api('POST','/tour/'+encodeURIComponent(tid)+'/gruppo', {testo:m}); toast(`Inviato a ${j.destinatari} iscritti · ${j.conApp} sul telefono`); delete GP_INFO[tid]; syncNow(false); }
+  catch(e){ toast('Invio non riuscito: '+e.message); }
+}
 
 </script>
 <script src="/app-mobile.js"></script>
