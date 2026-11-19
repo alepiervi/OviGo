@@ -1390,7 +1390,7 @@ function tourEditor(){
   if(et==='generale'){
     body = `<div class="grid g2">${inp('titolo','Nome del gruppo (titolo) *',{ph:'Es. Mercatini di Natale in Trentino'})}${inp('tipo','Tipologia di viaggio',{sel:Object.entries(TIPI),rerender:1})}</div>
     <div class="grid g4">${inp('dataInizio','Data di partenza',{type:'date'})}${inp('dataFine','Data di rientro',{type:'date'})}${inp('area','Area',{sel:[['italia','Italia'],['estero','Estero']]})}${inp('festivita','Ponte / festività',{sel:[['','Nessuna'],...Object.entries(FEST)]})}</div>
-    <div class="grid g4">${inp('tema','Immagine / tema',{sel:THEMES.map(x=>[x,x])})}${inp('trattamento','Trattamento',{sel:TRATT.map(x=>[x,x])})}${inp('minPartecipanti','Minimo partecipanti per confermare',{type:'number'})}${inp('dataConferma','Data limite di conferma',{type:'date'})}</div>
+    <div class="grid g4">${inp('tema','Immagine / tema',{sel:THEMES.map(x=>[x,x])})}${inp('trattamento','Trattamento',{sel:TRATT.map(x=>[x,x])})}${inp('minPartecipanti','Minimo partecipanti per confermare',{type:'number'})}${inp('mostraIscritti','Nella card mostra',{sel:[['','Come impostato da OVIGO'],['entrambi','Persone mancanti e posti liberi'],['mancano','Solo persone mancanti alla conferma'],['posti','Solo posti disponibili'],['nessuno','Nessuno dei due']]})}${inp('dataConferma','Data limite di conferma',{type:'date'})}</div>
     ${inp('descrizione','Descrizione generale del tour',{area:1})}
     <label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" style="width:auto" ${(t.tags||[]).includes('famiglie')?'checked':''} onchange="toggleTag('famiglie',this.checked)"> Adatto alle famiglie (compare nei filtri)</label>${editorExtra(t)}`;
   } else if(et==='programma'){
@@ -1704,7 +1704,7 @@ function viewAdmin(){
     main = `<h2>Utenti</h2><div class="card" style="overflow-x:auto"><table><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Profilo</th><th class="num">Prenotazioni</th></tr>${Object.values(S.users).map(u=>`<tr><td>${esc(u.nome)} ${esc(u.cognome||'')}</td><td class="small">${esc(u.email||'')}</td><td><span class="badge gray">${u.ruolo}</span></td><td class="small">${Object.keys(u.profilo||{}).length?'compilato':'—'}</td><td class="num">${Object.values(S.bookings).filter(b=>b.userId===u.id&&b.tipo==='prenotazione').length}</td></tr>`).join('')}</table></div>`;
   } else if(sub==='impostazioni'){
     const s = settings();
-    main = `<h2>Impostazioni generali</h2><div class="card pad" style="max-width:520px"><div class="field"><label>Commissione OVIGO sugli organizzatori (%)</label><input id="st_comm" type="number" step="0.1" value="${s.commissione}"><div class="tiny muted">Calcolata sul prezzo di vendita delle prenotazioni attive</div></div><div class="field"><label>Acconto richiesto ai clienti (%)</label><input id="st_acc" type="number" value="${s.accontoPct}"></div><div class="field"><label>Canone abbonamento</label><input disabled value="Non attivo in questa fase (predisposto)"></div><button class="btn pri" onclick="saveSettings()">Salva</button></div>`;
+    main = `<h2>Impostazioni generali</h2>${boxMostraIscritti()}<div class="card pad" style="max-width:520px"><div class="field"><label>Commissione OVIGO sugli organizzatori (%)</label><input id="st_comm" type="number" step="0.1" value="${s.commissione}"><div class="tiny muted">Calcolata sul prezzo di vendita delle prenotazioni attive</div></div><div class="field"><label>Acconto richiesto ai clienti (%)</label><input id="st_acc" type="number" value="${s.accontoPct}"></div><div class="field"><label>Canone abbonamento</label><input disabled value="Non attivo in questa fase (predisposto)"></div><button class="btn pri" onclick="saveSettings()">Salva</button></div>`;
   } else if(sub==='notifiche') main = notifList('admin');
   else {
     main = `<h2>Super admin</h2><div class="grid g4" style="margin:14px 0"><div class="card kpi"><div class="v">${Object.keys(S.orgs).length}</div><div class="l">Organizzatori · ${toVerify.length} da verificare</div></div><div class="card kpi"><div class="v">${Object.values(S.tours).filter(t=>t.stato==='pubblicato').length}</div><div class="l">Tour pubblicati</div></div><div class="card kpi"><div class="v">${eur(gmv)}</div><div class="l">Venduto sulla piattaforma</div></div><div class="card kpi"><div class="v">${eur(gmv*comm/100)}</div><div class="l">Commissioni maturate (${comm}%)</div></div></div>
@@ -4349,6 +4349,43 @@ const _normReal = norm;
 norm = function(c, o){ o = _normReal(c, o); if(c==='tours' && o.inEvidenza && o.evidenzaFino && o.evidenzaFino < new Date().toISOString().slice(0,10)) o.inEvidenza = false; return o; };
 const _publicToursReal = publicTours;
 publicTours = function(){ const l = _publicToursReal(); return l.filter(t=>t.inEvidenza).concat(l.filter(t=>!t.inEvidenza)); };
+
+/* ---------- Card: cosa mostrare (persone mancanti / posti disponibili) ---------- */
+const MOSTRA_ISCRITTI = { entrambi:'Persone mancanti alla conferma e posti liberi', mancano:'Solo le persone che mancano alla conferma', posti:'Solo i posti disponibili', nessuno:'Nessuno dei due' };
+function modoIscritti(t){ const m = t.mostraIscritti || settings().mostraIscritti || 'entrambi'; return MOSTRA_ISCRITTI[m] ? m : 'entrambi'; }
+const _tourCardReal = tourCard;
+tourCard = function(t){
+  const h = _tourCardReal(t), m = modoIscritti(t); if(m==='entrambi') return h;
+  const ok = confirmed(t), free = freeSeats(t), min = +t.minPartecipanti||0, manc = Math.max(0, min-occupied(t));
+  const conf = '<b style="color:var(--green)">✓ Partenza confermata</b>', compl = '<b style="color:var(--red)">Completo</b>';
+  let riga;
+  if(m==='mancano') riga = `<div class="row between small"><span>${ok?conf:`Mancano <b>${manc}</b> persone alla conferma`}</span>${free?'':`<span>${compl}</span>`}</div>`;
+  else if(m==='posti') riga = `<div class="row between small"><span>${ok?conf:''}</span><span>${free?`<b>${free}</b> posti disponibili`:compl}</span></div>`;
+  else riga = `<div class="row between small"><span>${ok?conf:''}</span><span>${free?'':compl}</span></div>`;
+  const barra = m==='mancano' ? (h.match(/<div class="fill[^>]*>[\s\S]*?<\/div>/)||[''])[0] : '';
+  return h.replace(/<div class="fill[^>]*>[\s\S]*?<\/div>\s*<div class="row between small">[\s\S]*?<\/div>(?=\s*<div class="price">)/, barra + riga);
+};
+function boxMostraIscritti(){
+  const v = settings().mostraIscritti || 'entrambi';
+  return `<div class="card pad" style="margin-bottom:14px"><b>Card dei viaggi: cosa mostrare sotto il titolo</b><div class="small muted" style="margin:2px 0 8px">Vale per tutti i viaggi, salvo quelli in cui l'agenzia sceglie diversamente nella scheda «Generale».</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap"><select id="st_mi" style="max-width:420px">${Object.entries(MOSTRA_ISCRITTI).map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm pri" onclick="saveMostraIscritti()">Salva</button></div></div>`;
+}
+async function saveMostraIscritti(){ await save('settings', Object.assign({id:'general'}, settings(), {mostraIscritti:val('st_mi')})); toast('Impostazione salvata: le card si aggiornano subito'); }
+
+/* ---------- Minori nel gruppo: fasce d'età (anonime) ---------- */
+const FASCE_MINORI = [[0,2,'0–2 anni'],[3,5,'3–5 anni'],[6,10,'6–10 anni'],[11,13,'11–13 anni'],[14,17,'14–17 anni']];
+function minoriFasce(t){
+  const c = FASCE_MINORI.map(()=>0);
+  activeBookings(t).forEach(b=>(b.partecipanti||[]).forEach(p=>{ if(p.eta===''||p.eta==null) return; const e = +p.eta; if(!(e>=0 && e<18)) return; const i = FASCE_MINORI.findIndex(f=>e>=f[0]&&e<=f[1]); if(i>=0) c[i]++; }));
+  return FASCE_MINORI.map((f,i)=>({lbl:f[2], n:c[i]})).filter(x=>x.n);
+}
+function minoriBox(t){
+  const f = minoriFasce(t); if(!f.length) return '';
+  const tot = f.reduce((s,x)=>s+x.n,0);
+  return `<div class="small" style="margin-top:10px"><b>Minori nel gruppo (${tot})</b></div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${f.map(x=>`<span class="badge">${x.n} · ${x.lbl}</span>`).join('')}</div>`;
+}
+const _chiCeReal = chiCe;
+chiCe = function(t){ const h = _chiCeReal(t), m = minoriBox(t); if(!m) return h; if(occupied(t) < 3) return h.replace(/<\/div>\s*$/, m.replace('Minori nel gruppo','Minori già iscritti')+'</div>'); return h.replace(/<\/div>\s*$/, m+'</div>'); };
 
 
 /* ============ AVVIO ============ */
