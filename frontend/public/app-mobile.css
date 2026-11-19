@@ -1,0 +1,87 @@
+/* OVIGO: adattamento a telefono e tablet + app installabile */
+html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
+img,svg,video,iframe{max-width:100%}
+.app>*,.dlayout>*,.grid>*,.searchbox>*,.main{min-width:0}
+.main .card{max-width:100%}
+.hamb{display:none;padding:7px 11px;font-size:1.05rem;line-height:1}
+@media(min-width:801px){header.site nav.main{height:64px;align-self:center}}
+.nav-close{display:none}
+
+/* tablet */
+@media(max-width:1024px){
+  .wrap{padding:0 16px}
+  .main{padding:20px 18px 60px}
+  .dlayout{grid-template-columns:1fr 300px;gap:18px}
+}
+@media(max-width:900px){
+  .dlayout{grid-template-columns:1fr}
+  .side{position:static}
+}
+
+/* menu del sito su telefono e tablet piccolo */
+@media(max-width:800px){
+  .hamb{display:inline-flex}
+  header.site .wrap{position:relative}
+  body.nav-open nav.main{display:flex;height:auto;position:absolute;top:64px;left:0;right:0;flex-direction:column;align-items:stretch;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 14px 30px rgba(22,48,47,.12);padding:8px 12px 14px;gap:2px;z-index:30;overflow:visible}
+  body.nav-open nav.main a,body.nav-open nav.main a.opt{display:block;padding:12px 12px;font-size:1rem}
+
+  /* barra laterale delle aree riservate: diventa un menu a scomparsa */
+  .app{grid-template-columns:1fr;min-height:0}
+  .sidebar{border-right:none;border-bottom:1px solid var(--line);padding:10px 12px}
+  .sidebar .who{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 4px 10px;margin-bottom:0;border-bottom:none;flex-wrap:wrap}
+  .sb-toggle{display:inline-flex!important;width:100%;justify-content:center;margin-top:4px}
+  body:not(.sb-open) .sidebar>*:not(.who):not(.sb-toggle){display:none}
+  body.sb-open .sidebar{max-height:70vh;overflow-y:auto}
+  .sidebar a{padding:11px 10px;font-size:.95rem}
+
+  /* tabelle larghe: scorrono di lato invece di uscire dallo schermo */
+  .main table,.wrap table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .main table td,.main table th{white-space:normal;min-width:90px}
+  .tabs{-webkit-overflow-scrolling:touch}
+}
+.sb-toggle{display:none}
+
+/* telefono */
+@media(max-width:600px){
+  body{font-size:15px}
+  h1{font-size:1.75rem} h2{font-size:1.35rem}
+  .hero{padding:32px 0 44px}
+  .searchbox{grid-template-columns:1fr;padding:14px}
+  .searchbox .btn{width:100%;justify-content:center}
+  .smart{border-radius:16px;flex-wrap:wrap;padding:8px 8px 8px 14px}
+  .smart input{min-width:0;flex:1}
+  .sechead{flex-wrap:wrap;align-items:flex-start}
+  .detailhero{height:200px}
+  .day{grid-template-columns:50px 1fr;gap:10px}
+  #modal{padding:12px 8px}
+  #modal .box{padding:18px 14px;border-radius:14px}
+  .row{gap:8px}
+  .btn{padding:9px 14px}
+  .kpi .v{font-size:1.35rem}
+  input,select,textarea{font-size:16px}
+  .gd-steps li{grid-template-columns:1fr}
+  .flyer .fl-row{flex-wrap:wrap}
+  footer .grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:380px){
+  header.site .row .btn{padding:6px 7px;font-size:.74rem}
+  footer .grid{grid-template-columns:1fr}
+}
+
+/* app installata: rispetta le zone sicure (notch, barra home) */
+@media(display-mode:standalone){
+  header.site{padding-top:env(safe-area-inset-top)}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+}
+
+/* banner installa app / attiva notifiche */
+#appbanner{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:45;display:none;max-width:520px;margin:0 auto;background:var(--ink);color:#fff;border-radius:16px;padding:12px 12px 12px 14px;box-shadow:0 14px 40px rgba(0,0,0,.3);align-items:center;gap:12px}
+#appbanner.on{display:flex;animation:abIn .35s ease}
+#appbanner img{width:40px;height:40px;border-radius:10px;flex:none}
+#appbanner .t{flex:1;font-size:.88rem;line-height:1.3}
+#appbanner .t b{display:block;font-size:.95rem}
+#appbanner .btn{flex:none}
+#appbanner .x{background:transparent;border:none;color:#c7d3d1;font-size:1.3rem;cursor:pointer;padding:4px 6px;flex:none}
+@keyframes abIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.appsteps{margin:10px 0 0;padding-left:20px}
+.appsteps li{margin:6px 0}

@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "OVIGO · Viaggi di gruppo",
+  "short_name": "OVIGO",
+  "description": "Viaggi di gruppo organizzati da agenzie verificate: prenotazioni, pagamenti, gruppi e notifiche.",
+  "lang": "it",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fbf8f2",
+  "theme_color": "#0f4c5c",
+  "categories": ["travel"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

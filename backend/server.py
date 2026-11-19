@@ -188,6 +188,96 @@ async def notify(to: str, testo: str, extra: Optional[dict] = None, url: str = "
     n.update(extra or {})
     await put("notifications", n)
     fire(email_for_notification(n, url))
+    fire(push_for_notification(n))
+
+
+# ------------------------------------------------------------------ notifiche push (app installabile)
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@ovigo.it")
+
+
+async def push_uids(to: str) -> list:
+    if to.startswith("user:"):
+        return [to[5:]]
+    if to.startswith("org:"):
+        return [d["_id"] async for d in db.users.find({"orgId": to[4:], "ruolo": "organizzatore"}, {"_id": 1})]
+    if to == "admin":
+        return [d["_id"] async for d in db.users.find({"ruolo": "admin"}, {"_id": 1})]
+    return []
+
+
+def _send_push(sub: dict, payload: str):
+    from pywebpush import webpush
+    webpush(subscription_info=sub, data=payload, vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
+
+
+async def push_to_uids(uids: list, title: str, body: str, url: str = "/", tag: str = "") -> int:
+    if not (VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY) or not uids:
+        return 0
+    from pywebpush import WebPushException
+    payload = json.dumps({"title": title, "body": body[:240], "url": url or "/", "tag": tag})
+    sent = 0
+    async for s in db.push.find({"uid": {"$in": uids}}):
+        try:
+            await asyncio.to_thread(_send_push, s["sub"], payload)
+            sent += 1
+        except WebPushException as e:
+            code = getattr(getattr(e, "response", None), "status_code", 0)
+            if code in (404, 410):
+                await db.push.delete_one({"_id": s["_id"]})
+            else:
+                log.warning("push errore: %s", e)
+        except Exception as e:
+            log.warning("push errore: %s", e)
+    return sent
+
+
+async def push_for_notification(n: dict):
+    try:
+        await push_to_uids(await push_uids(n.get("to", "")), "OVIGO", n.get("testo", ""), "/", n.get("id", ""))
+    except Exception as e:
+        log.warning("push non inviata: %s", e)
+
+
+@app.get("/api/push/chiave")
+async def push_key():
+    return {"publicKey": VAPID_PUBLIC_KEY}
+
+
+@app.post("/api/push/iscrivi")
+async def push_subscribe(request: Request):
+    u = await need_user(request)
+    sub = await request.json()
+    if not isinstance(sub, dict) or not str(sub.get("endpoint", "")).startswith("https://") or not isinstance(sub.get("keys"), dict):
+        raise HTTPException(400, "Iscrizione non valida")
+    sub = {"endpoint": sub["endpoint"], "keys": {k: str(v) for k, v in sub["keys"].items() if k in ("p256dh", "auth")}}
+    key = hashlib.sha256(sub["endpoint"].encode()).hexdigest()
+    await db.push.replace_one({"_id": key}, {"_id": key, "uid": u["id"], "sub": sub, "ua": request.headers.get("user-agent", "")[:200], "at": iso_now()}, upsert=True)
+    return {"ok": True}
+
+
+@app.post("/api/push/disiscrivi")
+async def push_unsubscribe(request: Request):
+    u = await need_user(request)
+    body = await request.json()
+    key = hashlib.sha256(str(body.get("endpoint", "")).encode()).hexdigest()
+    await db.push.delete_one({"_id": key, "uid": u["id"]})
+    return {"ok": True}
+
+
+@app.get("/api/push/stato")
+async def push_status(request: Request):
+    u = await need_user(request)
+    return {"dispositivi": await db.push.count_documents({"uid": u["id"]}), "attivo": bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)}
+
+
+@app.post("/api/push/prova")
+async def push_test(request: Request):
+    u = await need_user(request)
+    n = await push_to_uids([u["id"]], "OVIGO", f"Ciao {u.get('nome','')}, le notifiche di OVIGO funzionano su questo dispositivo.", "/", "prova")
+    return {"inviate": n}
 
 
 async def email_for_notification(n: dict, url: str = ""):
@@ -955,6 +1045,8 @@ async def write_doc(c: str, id_: str, request: Request):
     new = await check_write(ctx, c, old, body)
     saved = await put(c, new)
     await after_write(ctx, c, old, saved, request)
+    if c == "notifications" and not old:
+        fire(push_for_notification(saved))
     ctx2 = await make_ctx(await raw_get("users", u["id"]))
     return {"doc": visible(ctx2, c, saved) or saved}
 
