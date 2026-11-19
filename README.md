@@ -89,9 +89,22 @@ Apri http://localhost:8001: il server mostra anche il sito.
 - Fai verificare al commercialista lo schema di incasso (commissione con bonifico separato o fatturata all'agenzia) e la fatturazione elettronica.
 - Ogni agenzia deve inserire il proprio IBAN in **CRM → Bonifici dei clienti**.
 
+## Differenze rispetto alla demo
+
+Tutte le funzioni della demo sono presenti. Cambia solo ciò che nella demo era finto:
+- **Accesso**: login vero con password. Il cambio utente dalla barra demo e i pulsanti Google/Facebook simulati sono stati tolti.
+- **Pagamenti**: bonifico diviso al posto della carta simulata. Lo stesso vale per la visibilità «In evidenza», che l'admin attiva quando riceve il bonifico.
+- **Documenti e foto**: salvati davvero (server e Cloudinary).
+- **Assistente del tour**: risponde con i dati del viaggio (prezzi, partenze, documenti, hotel, pagamenti). Nella demo usava l'intelligenza artificiale di Claude, che funziona solo dentro claude.ai.
+- **Importa programma da testo**: divide il testo per giorni con la lettura semplice, senza l'intelligenza artificiale.
+- **Avvisi di viaggio**: li inserisce l'admin. Il pulsante «simula feed» è stato tolto.
+- **WhatsApp**: i pulsanti aprono WhatsApp con il messaggio pronto. Le notifiche automatiche partono in app e via email, non via WhatsApp.
+
 ## Cosa resta da fare in una fase successiva
 
 - I prezzi sono calcolati nella pagina del cliente: il server impedisce di segnarsi «pagato» e di abbassare il totale dopo la prenotazione, ma l'agenzia deve comunque controllare il totale di ogni nuova prenotazione prima di confermare il bonifico. Il calcolo del prezzo direttamente sul server è il primo miglioramento consigliato.
 - Le attività programmate (convocazioni a data e ora, promemoria) partono quando l'agenzia apre il CRM, non da sole a orario.
 - Pagamento online con carta: si può aggiungere un servizio con commissioni basse (es. bonifico istantaneo «paga con banca» / PSD2) quando servirà.
 - Fatture elettroniche verso lo SDI: i documenti generati sono riepiloghi, non fatture elettroniche.
+- Intelligenza artificiale (assistente e importazione dei programmi): si può collegare una chiave API (Anthropic o simile), che ha un costo per l'uso.
+- Invio automatico su WhatsApp: richiede un fornitore WhatsApp Business API, a pagamento.

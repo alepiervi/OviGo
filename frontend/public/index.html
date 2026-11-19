@@ -3313,7 +3313,7 @@ async function publishAvviso(a){
 function avvisiAdmin(){
   const list = Object.values(S.avvisi).sort((a,b)=>a.dal<b.dal?-1:1);
   return `<h2>Avvisi di viaggio</h2><p class="small muted">Meteo, scioperi, viabilità e avvisi della Farnesina. Quando un avviso tocca la zona e le date di un tour, OVIGO avvisa in automatico i viaggiatori e l'agenzia e mostra l'avviso nella pagina del tour. In produzione gli avvisi arrivano dai servizi ufficiali; qui puoi inserirli o simularli.</p>
-  <div class="card pad" style="margin-bottom:14px"><div class="grid g4"><div class="field"><label>Tipo</label><select id="av_t">${Object.entries(AVVISO_TIPI).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></div><div class="field"><label>Dal</label><input type="date" id="av_d"></div><div class="field"><label>Al</label><input type="date" id="av_a"></div><div class="field"><label>Zona (parole chiave, separate da virgola)</label><input id="av_z" placeholder="Trentino, Bolzano, Brennero"></div></div><div class="field"><label>Titolo</label><input id="av_ti" placeholder="Es. Neve abbondante sui passi alpini"></div><div class="field"><label>Dettagli</label><input id="av_x"></div><div class="row"><button class="btn pri" onclick="addAvviso()">Pubblica avviso</button><button class="btn" onclick="simulaAvvisi()">Simula il feed automatico</button></div></div>
+  <div class="card pad" style="margin-bottom:14px"><div class="grid g4"><div class="field"><label>Tipo</label><select id="av_t">${Object.entries(AVVISO_TIPI).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></div><div class="field"><label>Dal</label><input type="date" id="av_d"></div><div class="field"><label>Al</label><input type="date" id="av_a"></div><div class="field"><label>Zona (parole chiave, separate da virgola)</label><input id="av_z" placeholder="Trentino, Bolzano, Brennero"></div></div><div class="field"><label>Titolo</label><input id="av_ti" placeholder="Es. Neve abbondante sui passi alpini"></div><div class="field"><label>Dettagli</label><input id="av_x"></div><div class="row"><button class="btn pri" onclick="addAvviso()">Pubblica avviso</button></div></div>
   <div class="card" style="overflow-x:auto"><table><tr><th>Tipo</th><th>Avviso</th><th>Periodo</th><th>Zona</th><th>Tour coinvolti</th><th></th></tr>${list.map(a=>{ const tt = Object.values(S.tours).filter(t=>t.stato==='pubblicato'&&avvisiFor(t).some(x=>x.id===a.id)); return `<tr><td class="small">${esc(AVVISO_TIPI[a.tipo]||'')}</td><td><b>${esc(a.titolo)}</b><div class="small muted">${esc(a.testo||'')}</div></td><td class="small">${frange(a.dal,a.al)}</td><td class="small">${esc(a.zona||'tutta Italia')}</td><td class="small">${tt.map(t=>esc(t.titolo)).join('<br>')||'—'}</td><td><button class="btn sm ghost" onclick="remove('avvisi','${a.id}')">Elimina</button></td></tr>`; }).join('')||'<tr><td colspan="6" class="muted small">Nessun avviso attivo.</td></tr>'}</table></div>`;
 }
 async function addAvviso(){ if(!val('av_ti')||!val('av_d')){ toast('Titolo e data'); return; } const n = await publishAvviso({tipo:val('av_t'), dal:val('av_d'), al:val('av_a')||val('av_d'), zona:val('av_z'), titolo:val('av_ti'), testo:val('av_x')}); toast('Avviso pubblicato · '+n+' viaggiatori avvisati'); }
@@ -4318,6 +4318,37 @@ dupTour = async function(id){
   const nuovo = Object.keys(S.tours).find(k=>!prima.has(k)); if(!nuovo) return;
   for(const m of Object.values(S.media).filter(m=>m.tourId===id)) await save('media', Object.assign({}, m, {id:uid('ph'), tourId:nuovo}));
 };
+
+/* ---------- Visibilità «In evidenza» a pagamento: bonifico a OVIGO, l'admin la attiva ---------- */
+const EVIDENZA = { importo:29, giorni:7 };
+async function buyFeat(tid){
+  const t = S.tours[tid]; if(!t) return;
+  const r = t.evidenzaRichiesta;
+  if(!r || r.stato!=='da_pagare') await save('tours', Object.assign({}, t, {evidenzaRichiesta:{stato:'da_pagare', importo:EVIDENZA.importo, giorni:EVIDENZA.giorni, il:new Date().toISOString(), causale:'OVIGO EVIDENZA '+t.id.slice(-6).toUpperCase()}}));
+  const tt = S.tours[tid], st = settings();
+  await notify('admin', `⭐ ${(myOrg()||{}).nome||''} ha chiesto la visibilità «In evidenza» per «${t.titolo}» (${eur(EVIDENZA.importo)}): in attesa del bonifico.`, {tourId:tid});
+  openModal(`<h2>Metti in evidenza «${esc(t.titolo)}»</h2><p class="small">${EVIDENZA.giorni} giorni in cima ai risultati e in home. Si attiva appena OVIGO riceve il bonifico.</p>${bonificoRiga('Bonifico a OVIGO', EVIDENZA.importo, st.banca, (tt.evidenzaRichiesta||{}).causale||'')}<button class="btn pri" onclick="closeModal()">Ho capito</button>`);
+}
+async function attivaEvidenza(tid){
+  const t = S.tours[tid], r = t.evidenzaRichiesta||{}, g = r.giorni||EVIDENZA.giorni;
+  const base = t.evidenzaFino && t.evidenzaFino > new Date().toISOString().slice(0,10) ? new Date(t.evidenzaFino) : new Date();
+  const fino = new Date(base.getTime()+g*864e5).toISOString().slice(0,10);
+  await save('tours', Object.assign({}, t, {inEvidenza:true, evidenzaFino:fino, evidenzaRichiesta:Object.assign({}, r, {stato:'pagata', pagataIl:new Date().toISOString()})}));
+  await notify('org:'+t.orgId, `⭐ Bonifico ricevuto: «${t.titolo}» è in evidenza fino al ${fdate(fino,'y')}.`, {tourId:tid});
+  toast('Visibilità attivata');
+}
+const _adminPagamentiBase = adminPagamenti;
+adminPagamenti = function(){
+  const req = Object.values(S.tours).filter(t=>(t.evidenzaRichiesta||{}).stato==='da_pagare');
+  return _adminPagamentiBase() + `<h3 style="margin-top:16px">Visibilità «In evidenza» in attesa di bonifico (${req.length})</h3><div class="card list">${req.map(t=>`<div class="item row between"><span><b>${esc(t.titolo)}</b> · ${esc((S.orgs[t.orgId]||{}).nome||'')} · ${eur(t.evidenzaRichiesta.importo)} <span class="tiny muted">causale «${esc(t.evidenzaRichiesta.causale)}»</span></span><button class="btn sm pri" onclick="attivaEvidenza('${t.id}')">✓ Bonifico ricevuto</button></div>`).join('') || '<div class="item small muted">Nessuna richiesta.</div>'}</div>`;
+};
+ADMIN_SECTIONS.pagamenti = ['Pagamenti e commissioni', adminPagamenti];
+async function simulaAvvisi(){}
+/* la visibilità scade da sola; i tour in evidenza vengono mostrati per primi */
+const _normReal = norm;
+norm = function(c, o){ o = _normReal(c, o); if(c==='tours' && o.inEvidenza && o.evidenzaFino && o.evidenzaFino < new Date().toISOString().slice(0,10)) o.inEvidenza = false; return o; };
+const _publicToursReal = publicTours;
+publicTours = function(){ const l = _publicToursReal(); return l.filter(t=>t.inEvidenza).concat(l.filter(t=>!t.inEvidenza)); };
 
 
 /* ============ AVVIO ============ */

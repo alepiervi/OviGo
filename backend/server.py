@@ -723,7 +723,10 @@ async def check_write(ctx: Ctx, c: str, old: Optional[dict], new: dict) -> dict:
 
     if c == "tours":
         if org and new.get("orgId") == org and (not old or old.get("orgId") == org):
-            keep(new, old, ["confermatoIl", "scontoApplicato"])
+            keep(new, old, ["confermatoIl", "scontoApplicato", "inEvidenza", "evidenzaFino"])
+            r = new.get("evidenzaRichiesta")
+            if isinstance(r, dict) and r.get("stato") == "pagata" and ((old or {}).get("evidenzaRichiesta") or {}).get("stato") != "pagata":
+                new["evidenzaRichiesta"] = (old or {}).get("evidenzaRichiesta")
             return new
         if old and old["id"] in ctx.ref_tours:  # capogruppo: solo campi del gruppo
             m = dict(old)
