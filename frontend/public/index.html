@@ -4394,6 +4394,22 @@ renderBar();
 initDb();
 initAI();
 
+/* ---------- Admin: dati di prova ---------- */
+let DEMO_INFO = null;
+function adminDemo(){
+  if(!DEMO_INFO){ api('GET','/admin/demo').then(j=>{ DEMO_INFO=j; renderAll(); }).catch(e=>toast(e.message)); return '<h2>Dati di prova</h2><p class="small muted">Caricamento…</p>'; }
+  const d = DEMO_INFO, righe = Object.entries(d.perTipo).map(([c,n])=>`<tr><td>${esc(c)}</td><td class="num" data-testid="demo-count-${c}">${n}</td></tr>`);
+  return `<h2>Dati di prova</h2><p class="small muted">Agenzie, tour, clienti, prenotazioni e accompagnatori finti caricati per la presentazione, più quanto è stato creato collegato a loro. Il tuo account admin non viene toccato. Una volta eliminati non vengono più ricaricati.</p>
+  <div class="card kpi" style="margin:14px 0;max-width:280px"><div class="v" data-testid="demo-total">${d.totale}</div><div class="l">Elementi di prova presenti</div></div>
+  ${d.totale ? admTable(['Tipo','Quanti'], righe) + `<button class="btn pri" style="margin-top:14px" data-testid="demo-delete-btn" onclick="adminDemoDelete()">Elimina tutti i dati di prova</button>` : `<div class="notice" data-testid="demo-empty">Nessun dato di prova presente.</div>`}`;
+}
+async function adminDemoDelete(){
+  if(!confirm('Eliminare tutti i dati di prova? L\'operazione non si può annullare.')) return;
+  try{ const j = await api('DELETE','/admin/demo'); toast(`Eliminati ${j.eliminati} elementi di prova`); DEMO_INFO = null; await syncNow(true); }
+  catch(e){ toast('Eliminazione non riuscita: '+e.message); }
+}
+ADMIN_SECTIONS.demo = ['Dati di prova', adminDemo];
+
 </script>
 </body>
 </html>

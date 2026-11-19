@@ -17,6 +17,7 @@ import logging
 import asyncio
 import base64
 import hashlib
+import json
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -1418,6 +1419,63 @@ async def cloudinary_destroy(public_id: str):
         log.warning("Cloudinary destroy: %s", e)
 
 
+# ------------------------------------------------------------------ dati di prova (solo admin)
+def demo_ids() -> dict:
+    p = ROOT / "demo_seed.json"
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text())
+    return {c: set(docs.keys()) | {d.get("id") for d in docs.values() if d.get("id")} for c, docs in data.items() if c in COLLS and c != "settings"}
+
+
+async def demo_targets(keep_uid: str) -> dict:
+    ids = demo_ids()
+    tours, orgs = ids.get("tours", set()), ids.get("orgs", set())
+    users = ids.get("users", set()) - {keep_uid}
+    out = {}
+    for c in COLLS:
+        if c == "settings":
+            continue
+        q = [{"_id": {"$in": list(ids.get(c, set()) - ({keep_uid} if c == "users" else set()))}}]
+        if c != "users":
+            q += [{"tourId": {"$in": list(tours)}}, {"orgId": {"$in": list(orgs)}}, {"userId": {"$in": list(users)}}]
+        else:
+            q += [{"orgId": {"$in": list(orgs)}, "_id": {"$ne": keep_uid}}]
+        out[c] = [d["_id"] async for d in db[c].find({"$or": q}, {"_id": 1})]
+    return out
+
+
+async def need_admin(request: Request) -> dict:
+    u = await need_user(request)
+    if u.get("ruolo") != "admin":
+        deny()
+    return u
+
+
+@app.get("/api/admin/demo")
+async def demo_count(request: Request):
+    u = await need_admin(request)
+    t = await demo_targets(u["id"])
+    return {"totale": sum(len(v) for v in t.values()), "perTipo": {c: len(v) for c, v in t.items() if v},
+            "rimossi": bool(await db.meta.find_one({"_id": "demo_rimossa"}))}
+
+
+@app.delete("/api/admin/demo")
+async def demo_remove(request: Request):
+    u = await need_admin(request)
+    t = await demo_targets(u["id"])
+    n = 0
+    for c, lst in t.items():
+        for id_ in lst:
+            await delete_doc(c, id_)
+            n += 1
+    users = t.get("users", [])
+    if users:
+        await db.auth.delete_many({"_id": {"$in": users}})
+    await db.meta.replace_one({"_id": "demo_rimossa"}, {"_id": "demo_rimossa", "at": iso_now(), "by": u["id"]}, upsert=True)
+    return {"ok": True, "eliminati": n}
+
+
 # ------------------------------------------------------------------ avvio
 @app.get("/api/health")
 async def health():
@@ -1436,7 +1494,7 @@ async def startup():
             await put("users", u)
             await create_auth(u["id"], ADMIN_EMAIL, ADMIN_PASSWORD)
             log.info("Creato l'amministratore %s", ADMIN_EMAIL)
-    if os.environ.get("SEED_DEMO", "").lower() in ("1", "true", "si", "sì", "yes"):
+    if os.environ.get("SEED_DEMO", "").lower() in ("1", "true", "si", "sì", "yes") and not await db.meta.find_one({"_id": "demo_rimossa"}):
         try:
             from seed_demo import seed
             await seed(db, put, create_auth, COLLS)
