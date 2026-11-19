@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the 'Notifica a tutto il gruppo' feature on the backend and the frontend. Backend: the new file test_ovigo_group_push.py has 17 tests and all pass; with the earlier files that makes 51 of 51. Covered: 401 for anonymous users; 403 for the other agency (gennaro on t_trentino) and for a client; 400 for empty, blank, missing, over-500-character, non-JSON and array bodies, and for a tour with no bookings. Exactly 500 characters is accepted. Each send makes one notification per booked client, starting with '📲 Viaggi del Sole per «...»:' and carrying the tourId. Giulia sees the message for t_righi in /api/sync and does not get the t_cinqueterre message. Admin admin@ovigo.it can read and send. conApp goes up when a booked client has a push subscription. Sent messages appear first in the history, with the sender's name. Frontend: works at desktop and at 390px. The tour picker reloads the counts (t_orvieto 17, t_cinqueterre 4). The template chips gp-modello-0..4 fill gp-text, update the counter and focus the textarea. gp-send-btn asks for confirmation with the count and tour name, shows the toast 'Inviato a 4 iscritti · 0 lo ricevono sul telefono', clears the textarea and puts the new message first in gp-storico. Cancelling the confirm sends nothing. The 11 tour-notify-btn-<id> buttons open the section with that tour selected (t_righi gave 6). The immediate 'Messaggio al gruppo' send in Convocazioni now makes a single POST /api/tour/{tid}/gruppo. The scheduled send still saves one 'programmato' (PUT /doc/programmati) and shows it as 'in coda'. Giulia's Notifiche list shows the new messages with 'via app'. Real phone push delivery was not tested: headless Chromium cannot do it.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/tour/{tid}/gruppo", "issue": "Each recipient is notified one after another in a loop, and each notify call also starts an email and a push task. Large groups (50+) slow the request and send a burst of emails. It works, but consider insert_many plus one batched push/email."},
+      {"endpoint": "db.avvisi_gruppo", "issue": "No endpoint to delete or hide history entries. The organiser cannot remove a mistaken message from the history, and the demo cleanup (demo_targets/COLLS) does not include avvisi_gruppo."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Notifica al gruppo history", "issue": "History items do not wrap long unbroken text such as long URLs or a 500-character word. The text spills past the card; at 390px the document scrollWidth became 3915px (normally hidden by app-mobile.css overflow-x). Add overflow-wrap:anywhere (word-break) to the .item text in gp-storico.", "selector": "[data-testid=gp-storico] .item", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Notifica al gruppo", "issues": ["The tour picker <select> and the sidebar links (sideLink) have no data-testid", "GP_INFO is cached per tour and only reloaded after a send, so counts go stale if bookings change during the session"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ovigo_group_push.py", "/app/test_reports/pytest/pytest_group.xml", "/app/test_reports/pytest/pytest_all.xml"],
+  "action_items": [
+    "Add overflow-wrap:anywhere to the gp-storico item text (and ideally to notification list text)",
+    "Optional: also send scheduled 'messaggio' programmati (sendProgrammato, index.html ~2489) through POST /api/tour/{tid}/gruppo. Today they still loop notify() on the client with the prefix '💬 Messaggio per «', are not logged in the history, and use activeBookings rather than the server's recipient set",
+    "Optional: add data-testid to the gp tour picker select"
+  ],
+  "critical_code_review_comments": [
+    "index.html now has three sendGroupMsg declarations (about lines 1659, 2503 and 4468) in the same script. The last one wins through hoisting, so it works, but the two dead copies should be removed",
+    "group_recipients counts booking.userId and partecipanti[].userId. The frontend 'Invia a N clienti' label in Convocazioni counts only activeBookings userIds, so the two numbers can differ",
+    "index.html is about 4480 lines in one file; consider splitting it"
+  ],
+  "updated_files": ["/app/backend/tests/test_ovigo_group_push.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "No seed data. The test sends created 49 notifications, 8 avvisi_gruppo entries and 1 programmato (all marked TEST_GP_ with run-specific markers). After testing they were deleted by their ids or unique markers. DELETE /api/admin/demo was not run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Group push tests are in tests/test_ovigo_group_push.py. They use t_cinqueterre (4 recipients) and t_righi (6, includes giulia). Every run creates notifications and avvisi_gruppo entries containing TEST_GP_<hex>; there is no API to delete avvisi_gruppo, so clean them up in mongo by the run marker. Log in through the UI with openAuth('login'), fill #lg_mail/#lg_pw, then doLogin(). Open the section with UI.sub='notificaGruppo'; UI.gp=<tid>; renderAll(). The Convocazioni tour key is UI.comms."
+}

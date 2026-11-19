@@ -14,6 +14,10 @@
 - PWA (manifest, icone, sw.js): installabile su Android/iOS/desktop senza store; modale «Scarica l'app» + banner in basso
 - Web Push con VAPID (pywebpush): /api/push/chiave|iscrivi|disiscrivi|stato|prova; ogni nuova notifica (notify() + PUT notifications) arriva anche come push a user/org/admin
 - iOS: notifiche solo dopo «Aggiungi alla schermata Home» (iOS 16.4+)
+## Done (2026-06, iteration 3) – Notifica al gruppo
+- CRM → «📲 Notifica al gruppo» + pulsante «📲 Notifica» in Programmazione gruppi: messaggio (max 500, modelli veloci) a tutti gli iscritti del viaggio → notifica in app + push sul telefono (+ email se Brevo attivo)
+- API GET/POST /api/tour/{tid}/gruppo (solo agenzia del viaggio o admin), storico in db.avvisi_gruppo; «Messaggio al gruppo» in Convocazioni usa lo stesso invio
 ## Backlog
+- Messaggi programmati inviati dal server (oggi partono solo quando l'agenzia ha il CRM aperto)
 - P1: add BREVO_API_KEY, MAIL_FROM (emails), CLOUDINARY_URL (photos), PUBLIC_URL after deploy
 - P2: original design issues: search form overflows on mobile, header nav alignment, "Ho cliccato il link (simula)" label

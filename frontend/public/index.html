@@ -4431,9 +4431,10 @@ const GP_MODELLI = [
   ['📍 Ritrovo', 'Siamo arrivati: ci ritroviamo tutti davanti all\'ingresso principale tra 10 minuti.']
 ];
 function gpLoad(tid, force){
-  if(!force && GP_INFO[tid]) return;
-  GP_INFO[tid] = GP_INFO[tid] || {loading:true};
-  api('GET','/tour/'+encodeURIComponent(tid)+'/gruppo').then(j=>{ GP_INFO[tid] = j; renderAll(); }).catch(e=>{ GP_INFO[tid] = {errore:e.message}; renderAll(); });
+  const c = GP_INFO[tid];
+  if(!force && c && (c.loading || Date.now() - (c._at||0) < 30000)) return;
+  GP_INFO[tid] = Object.assign({}, c||{}, {loading: !c || !!c.errore});
+  api('GET','/tour/'+encodeURIComponent(tid)+'/gruppo').then(j=>{ GP_INFO[tid] = Object.assign(j, {_at:Date.now()}); renderAll(); }).catch(e=>{ GP_INFO[tid] = {errore:e.message, _at:Date.now()}; renderAll(); });
 }
 function crmGroupPush(o){
   const p = tourPicker(o,'gp'), t = S.tours[p.cur];

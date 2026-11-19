@@ -1635,6 +1635,9 @@ async def demo_remove(request: Request):
     users = t.get("users", [])
     if users:
         await db.auth.delete_many({"_id": {"$in": users}})
+    tours = t.get("tours", [])
+    if tours:
+        await db.avvisi_gruppo.delete_many({"tourId": {"$in": tours}})
     await db.meta.replace_one({"_id": "demo_rimossa"}, {"_id": "demo_rimossa", "at": iso_now(), "by": u["id"]}, upsert=True)
     return {"ok": True, "eliminati": n}
 
