@@ -1,0 +1,39 @@
+{
+  "summary": "First test run of the imported OVIGO app (FastAPI + plain-HTML SPA). Backend: 15/15 pytest pass (health, static site, public sync tours, logins for admin/client/agency, wrong-password 401, client and agency sync data, register + duplicate 409 + validation 400, GET /api/admin/demo counts 200 for admin, 401 anon, 403 client/agency for both GET and DELETE). Frontend (Playwright): home loads with 'Prossime partenze', tour page opens, search '#cerca' shows 18 departures, client login shows the client area with 2 bookings, logout works, agency login opens the CRM dashboard, admin login opens Super admin with all Reparti sections plus 'Dati di prova' (demo-total=283, per-type table, demo-delete-btn visible). Clicking delete and dismissing the confirm dialog keeps the data. UI signup works and lands in #cliente with the 'Account creato' toast. NOT RUN: the actual DELETE /api/admin/demo bulk deletion, the restart/no-re-seed check and the re-seed. Testing rules forbid running bulk-delete/reset features even when the request asks, so these need a manual check.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/doc/users/{id}", "issue": "Deleting a user (admin) removes only the users doc and leaves the db.auth record. Afterwards, login with the old credentials returns 200 with a token and user:null, and the email cannot be registered again ('Email già registrata'). Reproduced with a TEST_ user, then cleaned up by hand."},
+      {"endpoint": "DELETE /api/admin/demo (code review)", "issue": "demo_targets matches linked docs only by tourId/orgId/userId. Notifications use a 'to' field ('user:<id>' / 'org:<id>'), so notifications created after seeding for demo users/orgs that have no tourId (e.g. welcome and quote notifications) would survive deletion as orphans. Messaggi/other collections that link users through other fields (from/to/partecipanti) may also be missed. Suggest also matching to in ['user:'+id, 'org:'+id]."},
+      {"endpoint": "GET /api/admin/demo", "issue": "Count moved from 282 to 283 during testing: automations add notifications linked to demo tours (expected behaviour, not a bug). Just note that the number changes."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Home/search on mobile 390px", "issues": ["Right column of the search form (Ponti e festività, Parola chiave, Tema, Dal giorno, Cerca) runs past the white card's right edge and gets clipped"]},
+      {"screen": "Header (desktop)", "issues": ["Main nav links (Viaggi, Ponti e festività...) sit at the top of the header and are not vertically centred with the logo and the Accedi/Registrati buttons"]},
+      {"screen": "Client area", "issues": ["The email verification banner button says 'Ho cliccato il link (simula)' but it actually re-sends the verification email (verifyEmail -> /auth/resend). The label is misleading."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ovigo_core.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Manually verify DELETE /api/admin/demo: run it, confirm admin@ovigo.it can still log in, restart the backend and confirm there is no re-seed (meta demo_rimossa), then re-seed with the given mongosh command",
+    "In demo_targets, also match notifications by 'to' in user:/org: ids of the demo users and orgs (and check messaggi link fields)",
+    "When a user is deleted, also delete or deactivate their db.auth record (or have login reject auth records with no user)",
+    "Fix the mobile overflow of the search form grid; optionally vertically centre the header nav"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1518 lines and index.html is 4415 lines (single files, imported as-is). Not changed, per the 'do not rewrite' instruction.",
+    "adminDemo(): if GET /admin/demo fails, DEMO_INFO stays null and every renderAll triggers the call again with an error toast. Acceptable, but consider caching the error.",
+    "Endpoints parse raw request.json() without Pydantic models (validation is done by hand)."
+  ],
+  "updated_files": ["/app/backend/tests/test_ovigo_core.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of tested flows"},
+  "test_credentials": "/app/memory/test_credentials.md is MISSING. Used the credentials from the review request: admin@ovigo.it / OvigoAdmin2026!, giulia.rossi@demo.it / Ovigo2026!, stefania@viaggidelsole.demo / Ovigo2026!",
+  "seed_data_creation": "None kept. Two TEST_ users created during the run (API + UI signup), plus their notification and auth records, were deleted by id.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest /app/backend/tests/test_ovigo_core.py -p no:xdist. The SPA has no data-testids except demo-total, demo-delete-btn, demo-count-<c> and demo-empty. Login modal: #lg_mail/#lg_pw (wait ~300ms after opening because of an autofocus timer). Signup: #su_nome #su_cognome #su_mail #su_pw #su_priv. Mongo 'auth' collection needs db.getCollection('auth') in mongosh. The demo DELETE flow has not been run yet."
+}

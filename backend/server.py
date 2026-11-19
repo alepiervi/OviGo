@@ -974,6 +974,8 @@ async def remove_doc(c: str, id_: str, request: Request):
         if d.get("publicId"):
             fire(cloudinary_destroy(d["publicId"]))
     await delete_doc(c, id_)
+    if c == "users":
+        await db.auth.delete_one({"_id": id_})
     if c == "bookings":
         await tour_triggers(d.get("tourId"))
     return {"ok": True}
@@ -1438,7 +1440,9 @@ async def demo_targets(keep_uid: str) -> dict:
             continue
         q = [{"_id": {"$in": list(ids.get(c, set()) - ({keep_uid} if c == "users" else set()))}}]
         if c != "users":
-            q += [{"tourId": {"$in": list(tours)}}, {"orgId": {"$in": list(orgs)}}, {"userId": {"$in": list(users)}}]
+            q += [{"tourId": {"$in": list(tours)}}, {"orgId": {"$in": list(orgs)}}, {"userId": {"$in": list(users)}},
+                  {"to": {"$in": ["user:" + x for x in users] + ["org:" + x for x in orgs]}},
+                  {"fromOrgId": {"$in": list(orgs)}}, {"toOrgId": {"$in": list(orgs)}}]
         else:
             q += [{"orgId": {"$in": list(orgs)}, "_id": {"$ne": keep_uid}}]
         out[c] = [d["_id"] async for d in db[c].find({"$or": q}, {"_id": 1})]
